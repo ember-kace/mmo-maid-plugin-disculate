@@ -2,12 +2,9 @@
 
 An in-Discord calculator plugin for [MMO Maid](https://mmomaid.com). Arithmetic, percentages, common math functions, and constants — without leaving the channel.
 
-```
-/calc expression: (3 + 4) * sqrt(16)
-                                              ┌────────────────────────────┐
-                                              │ `(3 + 4) * sqrt(16)` = **28** │
-                                              └────────────────────────────┘
-```
+> **You:** `/calc expression: (3 + 4) * sqrt(16)`
+>
+> **Disculate:** `(3 + 4) * sqrt(16)` = **28**
 
 Built for the MMO Maid platform's sandboxed plugin runtime. Safe-tier capabilities only (`interaction:respond`, `storage:kv`). No outbound HTTP, no disk writes, no `eval`/`exec`/`compile` on user input.
 

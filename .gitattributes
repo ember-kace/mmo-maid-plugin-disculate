@@ -1,0 +1,33 @@
+# Force consistent line endings in the repo regardless of contributor OS.
+# Working-tree checkout still respects the contributor's platform.
+* text=auto eol=lf
+
+# Explicit text + diff hints
+*.py        text diff=python
+*.md        text
+*.json      text
+*.txt       text
+*.toml      text
+*.cfg       text
+*.ini       text
+*.yaml      text
+*.yml       text
+.python-version text
+.gitignore  text
+.gitattributes text
+
+# Explicit binary (don't try to diff or normalize line endings)
+*.zip       binary
+*.gz        binary
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.webp      binary
+*.ico       binary
+
+# GitHub linguist — exclude internal tooling from the language stats
+# so the repo summary reflects the actual plugin code, not test fixtures.
+tests/**    linguist-detectable=true
+tools/**    linguist-detectable=true
+*.md        linguist-documentation=true

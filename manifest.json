@@ -1,0 +1,65 @@
+{
+  "id": "disculate",
+  "name": "Disculate",
+  "version": "0.2.0",
+  "description": "In-Discord calculator. Arithmetic, percentages, common math functions, and constants — no leaving the channel.",
+  "author": "Disculate",
+  "tags": ["calculator", "math", "utility"],
+  "capabilities_required": [
+    "interaction:respond",
+    "storage:kv"
+  ],
+  "slash_commands": [
+    {
+      "name": "calc",
+      "description": "Evaluate a math expression.",
+      "options": [
+        {
+          "name": "expression",
+          "description": "The expression to evaluate, e.g. (3 + 4) * sqrt(2)",
+          "type": 3,
+          "required": true
+        },
+        {
+          "name": "ephemeral",
+          "description": "If true, only you can see the result. Default false.",
+          "type": 5,
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "calc-config",
+      "description": "Configure per-server calculator defaults. Server admin only.",
+      "options": [
+        {
+          "name": "precision",
+          "description": "Decimal places for non-integer results (0-10).",
+          "type": 4,
+          "required": false
+        },
+        {
+          "name": "angle_mode",
+          "description": "Angle units for trig functions.",
+          "type": 3,
+          "required": false,
+          "choices": [
+            {"name": "Radians", "value": "rad"},
+            {"name": "Degrees", "value": "deg"}
+          ]
+        },
+        {
+          "name": "scientific_threshold",
+          "description": "Switch to scientific notation when magnitude exceeds 10^N (1-20).",
+          "type": 4,
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "calc-help",
+      "description": "Show the list of supported operators, functions, and constants.",
+      "options": []
+    }
+  ]
+}

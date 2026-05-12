@@ -44,6 +44,13 @@ def _latency_bucket(ms: float) -> str:
 
 
 def _user_id(event: Dict[str, Any]) -> str:
+    # Observed SDK shape (v0.5.0 runtime, May 2026): user_id is a flat
+    # top-level string. Falls back to the nested member.user.id /
+    # user.id shapes that the SDK docs example used, in case the SDK
+    # ever normalises differently.
+    uid = event.get("user_id")
+    if isinstance(uid, (str, int)):
+        return str(uid)
     member = event.get("member")
     if isinstance(member, dict):
         user = member.get("user")
@@ -60,8 +67,10 @@ def _user_id(event: Dict[str, Any]) -> str:
 
 
 def _is_admin(event: Dict[str, Any]) -> bool:
-    member = event.get("member") or {}
-    perms_raw = member.get("permissions", 0)
+    perms_raw = event.get("permissions")
+    if perms_raw is None:
+        member = event.get("member") or {}
+        perms_raw = member.get("permissions", 0)
     if isinstance(perms_raw, bool):
         return False
     try:
@@ -72,8 +81,18 @@ def _is_admin(event: Dict[str, Any]) -> bool:
 
 
 def _options(event: Dict[str, Any]) -> Dict[str, Any]:
+    # Observed SDK shape (v0.5.0): event["command_options"] is the flat
+    # list of {"name", "value"} dicts for slash commands. The SDK doc's
+    # example used "options" — kept as a fallback, plus the raw
+    # Discord-style data.options shape for extra defensiveness.
     out: Dict[str, Any] = {}
-    for opt in event.get("options", []) or []:
+    raw = (
+        event.get("command_options")
+        or event.get("options")
+        or (event.get("data") or {}).get("options")
+        or []
+    )
+    for opt in raw:
         if isinstance(opt, dict) and "name" in opt:
             out[opt["name"]] = opt.get("value")
     return out

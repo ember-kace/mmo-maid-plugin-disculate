@@ -267,6 +267,39 @@ def test_calc_implicit_multiplication_emits_want_explicit_mult():
         assert R.WANT_EXPLICIT_MULT in embed["footer"]["text"], expr
 
 
+def test_calc_with_real_sdk_event_shape_evaluates_expression():
+    # Regression: production logs (May 2026) showed every /calc returning
+    # EMPTY because the SDK delivers `command_options`, not `options`,
+    # and `user_id` as a top-level string, not nested in `member.user.id`.
+    # Lock the actual observed shape against future drift.
+    ctx = FakeCtx()
+    real_event = {
+        "type": "interaction_create",
+        "interaction_type": 2,
+        "command_name": "calc",
+        "user_id": "627259696343941120",
+        "guild_id": "1503442627750531274",
+        "channel_id": "1503472480785010910",
+        "user_username": "openshift",
+        "permissions": "8",  # ADMINISTRATOR bit
+        "command_options": [
+            {"name": "expression", "type": 3, "value": "3+6"},
+        ],
+        "modal_values": {},
+        "values": [],
+        "custom_id": "",
+        "component_type": 0,
+        "interaction_id": "1503780492552700147",
+    }
+    plugin_module.cmd_calc(ctx, real_event)
+    resp = ctx.interaction.responses[0]
+    desc = resp["embeds"][0]["description"]
+    assert "**9**" in desc, f"got desc: {desc}"
+    # Cooldown key should use the real user_id, not the fallback "unknown".
+    cd_keys = list(ctx.ephemeral.cooldowns.keys())
+    assert any("627259696343941120" in k for k in cd_keys), cd_keys
+
+
 def test_calc_works_when_ephemeral_raises():
     # T5-05: ephemeral subsystem failures must not block evaluation.
     # The plugin falls open (cooldown ineffective) but still answers.

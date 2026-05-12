@@ -16,11 +16,9 @@ Inventory of behaviors this plugin guesses at because the public SDK doc is inco
 
 ## A2 — `event["member"]["permissions"]` can be int OR str
 **Code:** `plugin.py:_is_admin`
-**Assumption:** Discord raw API uses string; some SDK transports decode to int. We handle both.
-**Probe:** Run `/calc-config precision:5` as an admin. Either branch should grant access. Log shows `_is_admin` returning True.
-**Falsification:** Admin command is rejected for a real admin. Dump `event["member"]` and check `permissions` type.
-**Fallback if wrong:** Update `_is_admin` to coerce the actual type seen.
-**Status:** Unverified.
+**Original assumption:** Discord raw API uses string; some SDK transports decode to int. We handle both.
+**Status:** **WRONG (resolved in v0.2.2).** The runtime delivers `permissions` as a top-level string on the event dict — there is no `member` wrapper at all. `_is_admin` now reads `event["permissions"]` first and falls back to the nested shape only if the top-level field is missing. Both int and str are still accepted.
+**Observed payload (May 2026):** `{"type": "interaction_create", "user_id": "...", "permissions": "8", ...}` — flat.
 
 ---
 
@@ -46,11 +44,9 @@ Inventory of behaviors this plugin guesses at because the public SDK doc is inco
 
 ## A5 — `user_id` path in interaction events
 **Code:** `plugin.py:_user_id`
-**Assumption:** `event["member"]["user"]["id"]` in guild, `event["user"]["id"]` in DMs (defensive — plugin is per-server, DMs shouldn't happen).
-**Probe:** Run `/calc 1+1`, log `request_id` and look at the cooldown key in the next request. Should be `cd:calc:<your_id>`, not `cd:calc:unknown`.
-**Falsification:** Cooldown key is `cd:calc:unknown` for a real user.
-**Fallback if wrong:** All anonymous users share one cooldown — soft DoS surface but not a crash. Update `_user_id`.
-**Status:** Unverified.
+**Original assumption:** `event["member"]["user"]["id"]` in guild, `event["user"]["id"]` in DMs.
+**Status:** **WRONG (resolved in v0.2.2).** Production logs revealed cooldown keys reading `cd:calc:unknown` — the fallback bucket — which is exactly the symptom this assumption was supposed to prevent. The actual shape is `event["user_id"]` as a top-level string. `_user_id` now checks that first; the nested shapes remain as fallbacks.
+**Observed payload (May 2026):** `{"user_id": "627259696343941120", "user_username": "openshift", ...}` — flat.
 
 ---
 
@@ -66,11 +62,10 @@ Inventory of behaviors this plugin guesses at because the public SDK doc is inco
 
 ## A7 — `event["options"]` is a flat list of `{"name", "value"}`
 **Code:** `plugin.py:_options`, all handlers.
-**Assumption:** SDK normalizes Discord's nested `data.options` to a flat list. SDK doc shows `event.get("options", [])` for slash command events.
-**Probe:** Run `/calc-config precision:3 angle_mode:deg`. Confirm the config writes both fields.
-**Falsification:** Only one field updated, or none — options shape is different.
-**Fallback if wrong:** Adjust `_options` to dig into `event["data"]["options"]`.
-**Status:** Unverified.
+**Original assumption:** SDK normalizes Discord's nested `data.options` to a flat list at `event["options"]`. SDK doc's example used `event.get("options", [])`.
+**Status:** **WRONG (resolved in v0.2.2). The biggest miss of the session.** Production logs showed every `/calc` returning the EMPTY reason despite users typing real expressions. The SDK delivers slash command arguments at `event["command_options"]`, not `event["options"]` — the SDK doc's example is out of date. `_options` now reads `command_options` first, then `options`, then `data.options`.
+**Observed payload (May 2026):** `{"command_name": "calc", "command_options": [{"name": "expression", "type": 3, "value": "3+6"}], ...}`.
+**Lesson:** The SDK doc's examples are not reliable — only the observed runtime payload is. The other SDK assumption entries in this file should be assumed unreliable until empirically validated.
 
 ---
 

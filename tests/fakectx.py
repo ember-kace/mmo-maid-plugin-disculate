@@ -145,13 +145,13 @@ class FakeCtx:
 
 
 def make_event(event_type="interaction_create", **overrides) -> Dict[str, Any]:
+    # Matches the SDK runtime shape observed via plugin logs (May 2026):
+    # flat user_id / permissions / command_options at the top level.
     base = {
         "type": event_type,
-        "member": {
-            "user": {"id": "111"},
-            "permissions": "0",
-        },
-        "options": [],
+        "user_id": "111",
+        "permissions": "0",
+        "command_options": [],
     }
     base.update(overrides)
     return base
@@ -160,12 +160,11 @@ def make_event(event_type="interaction_create", **overrides) -> Dict[str, Any]:
 def slash_event(name: str, options=None, permissions: int = 0, user_id: str = "111") -> Dict[str, Any]:
     return {
         "type": "interaction_create",
-        "name": name,
-        "member": {
-            "user": {"id": user_id},
-            "permissions": str(permissions),
-        },
-        "options": options or [],
+        "interaction_type": 2,
+        "command_name": name,
+        "user_id": user_id,
+        "permissions": str(permissions),
+        "command_options": options or [],
     }
 
 

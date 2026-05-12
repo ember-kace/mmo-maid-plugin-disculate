@@ -4,6 +4,22 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.2.2] — 2026-05-12
+
+Hotfix. Every `/calc` invocation in production returned "Expression is empty" — production logs revealed the SDK delivers slash command arguments at `event["command_options"]`, not `event["options"]` (the latter is what the SDK doc's example showed, and what we believed). `_user_id` was likewise reading `event["member"]["user"]["id"]` instead of the actual top-level `event["user_id"]`, so every cooldown was bucketed under `cd:calc:unknown`.
+
+### Fixed
+- `plugin._options` now reads `event["command_options"]` first, falling back to `event["options"]` and `event["data"]["options"]` for defensiveness. Confirms by regression test using a verbatim production-log payload.
+- `plugin._user_id` reads top-level `event["user_id"]` first; nested shapes remain as fallbacks. Cooldowns now bucket per real user.
+- `plugin._is_admin` reads top-level `event["permissions"]` first; nested `event["member"]["permissions"]` remains as a fallback.
+
+### Changed
+- `tests/fakectx.py:slash_event` and `make_event` updated to produce the observed SDK shape (flat `user_id` / `permissions` / `command_options`). Tests now validate the real-world shape, not the SDK doc's example.
+- `SDK-ASSUMPTIONS.md`: A2, A5, and A7 marked WRONG and resolved. Added a lesson note that the SDK doc's examples are not reliable until empirically validated.
+
+### Added
+- `tests/test_handlers.py:test_calc_with_real_sdk_event_shape_evaluates_expression` locks the production payload shape against future drift.
+
 ## [0.2.1] — 2026-05-11
 
 Refactor to satisfy the MMO Maid marketplace validator's substring-based pattern scanner. Zero behavior change for users; same 195-test suite passes; bundle size effectively unchanged.

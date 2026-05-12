@@ -4,6 +4,23 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.2.5] — 2026-05-12
+
+Branded the result, help, and config-updated embeds. The Disculate maid-chibi avatar now appears in the top-right corner so cards immediately read as "Disculate" rather than as a generic embed.
+
+### Added
+- `assets/disculate.webp` (3.3 KB, 128×128) — the Disculate brand asset, committed to the repo. Sourced from `mmomaid-disculate-128x128.jpg`, converted to WebP via Pillow at quality 88. Lives under `assets/` which is **not** in the bundle allowlist — Discord fetches it directly from `raw.githubusercontent.com` at render time, so the binary doesn't bloat the plugin zip.
+- `lib/embed.py:BRAND_THUMBNAIL_URL` — single source of truth for the brand image URL. Pinned to the `main` branch of this repo. Rebranding = replace the asset in place; the URL never changes, Discord re-fetches within ~minutes.
+- `lib/embed.py:build_result_embed`, `build_help_embed`, and `build_config_embed` (on the "updated" path only) now include `thumbnail = {"url": BRAND_THUMBNAIL_URL}` in their output. Discord renders this as an ~80×80 image top-right of the embed.
+- `manifest.json:icon_url` set to the same URL. Marketplace listing now carries the same visual identity as the in-Discord cards.
+- Six new tests in `tests/test_handlers.py`: three positive (result / help / config-updated carry the thumbnail), three negative (error / cooldown / config-current do NOT).
+- New SDK assumption A11 in `SDK-ASSUMPTIONS.md` — the SDK forwards `embed.thumbnail` to Discord. Probe by running `/calc 2+2` after install and confirming the avatar renders.
+
+### Notes
+- **Error, cooldown, and config-current embeds stay plain.** Red errors with a friendly maid in the corner felt off-tone; the cooldown notice is too small to absorb a thumbnail without looking lopsided; the read-only config view is informational rather than success.
+- **Bundle size unchanged** — `assets/` deliberately stays outside `INCLUDED_FILES`. The marketplace zip is still 12 files / ~20 KB.
+- Test count: 208 → 214.
+
 ## [0.2.4] — 2026-05-12
 
 Adds a "Steps" field to the `/calc` result card that shows the worked-out math — every intermediate computation, in order — for any expression with two or more operations. Zero behaviour change for trivial expressions: `/calc 2+2` still shows just the header-hero result with no extra clutter.

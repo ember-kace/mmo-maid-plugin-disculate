@@ -99,6 +99,16 @@ Inventory of behaviors this plugin guesses at because the public SDK doc is inco
 
 ---
 
+## A11 — `ctx.interaction.respond` forwards `embed.thumbnail` to Discord
+**Code:** `lib/embed.py:build_result_embed`, `build_help_embed`, `build_config_embed` (only on the "updated" path).
+**Assumption:** The SDK forwards arbitrary embed-dict keys to Discord's REST interaction-response API. `thumbnail = {"url": "<https-url>"}` is a standard Discord embed field and should pass through unchanged. Same reasoning as A1, but specifically about the thumbnail slot — Discord renders it top-right of the embed.
+**Probe:** Run `/calc 2+2` in a test guild after v0.2.5 ships. Confirm the Disculate maid avatar renders top-right of the result card. Same for `/calc-help` and `/calc-config precision:5` as admin.
+**Falsification:** Thumbnail absent or shown as a broken-image icon. Likely culprits: SDK strips unknown embed keys; or `raw.githubusercontent.com` is being blocked by Discord's image proxy (rare — it's a common CDN-style URL).
+**Fallback if wrong:** Drop the `"thumbnail"` key from the three embed builders. Cards revert to v0.2.4 visual. The asset and `manifest.json:icon_url` can stay (marketplace identity is unaffected).
+**Status:** Unverified.
+
+---
+
 ## Verification ritual (Phase 4, 30 minutes after first install)
 
 1. Run each command listed in the probe section above in a test server.

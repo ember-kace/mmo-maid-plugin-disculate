@@ -24,6 +24,16 @@ COLOR_OK = 0xC9A35A      # gold
 COLOR_ERROR = 0xCC4444   # red
 COLOR_INFO = 0x7A8AA0    # muted slate
 
+# Brand thumbnail rendered top-right of success embeds. Hosted in this
+# repo (assets/disculate.webp) so the URL never moves out from under us.
+# Rebranding = replace the file in place; Discord re-fetches within
+# minutes. Do NOT change this URL — Discord's image proxy caches it.
+BRAND_THUMBNAIL_URL = (
+    "https://raw.githubusercontent.com/ember-kace/"
+    "mmo-maid-plugin-disculate/main/assets/disculate.webp"
+)
+_BRAND_THUMBNAIL: Dict[str, str] = {"url": BRAND_THUMBNAIL_URL}
+
 EMBED_TITLE_MAX = 256
 EMBED_DESC_MAX = 4096
 EMBED_FIELD_NAME_MAX = 256
@@ -134,6 +144,7 @@ def build_result_embed(
     embed: Dict[str, Any] = {
         "description": clip(desc, EMBED_DESC_MAX),
         "color": COLOR_OK,
+        "thumbnail": _BRAND_THUMBNAIL,
     }
     # Optional Steps field — populated by the handler when the
     # expression had >= 2 traceable nodes (smart-auto threshold).
@@ -197,12 +208,17 @@ def build_config_embed(config: Dict[str, Any], changed: List[str]) -> Dict[str, 
         if changed
         else "No changes. Showing current configuration."
     )
-    embed = {
+    embed: Dict[str, Any] = {
         "title": clip(title, EMBED_TITLE_MAX),
         "description": clip(desc, EMBED_DESC_MAX),
         "color": COLOR_OK if changed else COLOR_INFO,
         "fields": fields,
     }
+    # Thumbnail only on the "Settings updated" path (admin actually
+    # changed a value). The read-only "Current settings" view uses
+    # INFO color and stays plain alongside cooldown / errors.
+    if changed:
+        embed["thumbnail"] = _BRAND_THUMBNAIL
     return enforce_total_cap(embed)
 
 
@@ -281,6 +297,7 @@ def build_help_embed() -> Dict[str, Any]:
         "title": "Disculate — quick reference",
         "description": clip(payload["description"], EMBED_DESC_MAX),
         "color": COLOR_INFO,
+        "thumbnail": _BRAND_THUMBNAIL,
         "fields": payload["fields"],
         "footer": {"text": clip(payload["footer_text"], EMBED_FOOTER_MAX)},
     }

@@ -383,6 +383,64 @@ def test_calc_steps_field_respects_precision_config():
     assert "0.333333" not in steps_field["value"]
 
 
+def test_calc_result_embed_carries_brand_thumbnail():
+    """v0.2.5: success embeds carry the Disculate avatar in the top-right."""
+    from lib.embed import BRAND_THUMBNAIL_URL
+    ctx = FakeCtx()
+    plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", "2+2")]))
+    embed = _embed(_first_response(ctx))
+    assert embed.get("thumbnail", {}).get("url") == BRAND_THUMBNAIL_URL
+
+
+def test_help_embed_carries_brand_thumbnail():
+    from lib.embed import BRAND_THUMBNAIL_URL
+    ctx = FakeCtx()
+    plugin_module.cmd_calc_help(ctx, slash_event("calc-help"))
+    embed = _embed(_first_response(ctx))
+    assert embed.get("thumbnail", {}).get("url") == BRAND_THUMBNAIL_URL
+
+
+def test_config_updated_embed_carries_brand_thumbnail():
+    from lib.embed import BRAND_THUMBNAIL_URL
+    ctx = FakeCtx()
+    plugin_module.cmd_calc_config(
+        ctx,
+        slash_event("calc-config", options=[opt("precision", 3)], permissions=0x20),
+    )
+    embed = _embed(_first_response(ctx))
+    assert embed.get("thumbnail", {}).get("url") == BRAND_THUMBNAIL_URL
+
+
+def test_error_embed_has_no_brand_thumbnail():
+    """v0.2.5: errors stay plain — brand on a red error feels off-tone."""
+    ctx = FakeCtx()
+    plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", "1/0")]))
+    embed = _embed(_first_response(ctx))
+    assert "thumbnail" not in embed
+
+
+def test_cooldown_embed_has_no_brand_thumbnail():
+    """v0.2.5: cooldown notice is small; thumbnail would overwhelm it."""
+    ctx = FakeCtx()
+    event = slash_event("calc", options=[opt("expression", "1+1")], user_id="42")
+    plugin_module.cmd_calc(ctx, event)
+    ctx.interaction.responses.clear()
+    plugin_module.cmd_calc(ctx, event)  # second call trips cooldown
+    embed = _embed(_first_response(ctx))
+    assert "thumbnail" not in embed
+
+
+def test_config_current_embed_has_no_brand_thumbnail():
+    """v0.2.5: read-only /calc-config (no fields changed) is informational, not success."""
+    ctx = FakeCtx()
+    plugin_module.cmd_calc_config(
+        ctx,
+        slash_event("calc-config", options=[], permissions=0x20),
+    )
+    embed = _embed(_first_response(ctx))
+    assert "thumbnail" not in embed
+
+
 def test_calc_works_when_ephemeral_raises():
     # T5-05: ephemeral subsystem failures must not block evaluation.
     # The plugin falls open (cooldown ineffective) but still answers.

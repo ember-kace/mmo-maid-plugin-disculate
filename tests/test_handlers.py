@@ -474,6 +474,54 @@ def test_config_current_embed_has_no_brand_thumbnail():
     assert "thumbnail" not in embed
 
 
+def test_calc_unknown_function_typo_suggests_in_error_embed():
+    """v0.2.8: diagnostic explainer surfaces did-you-mean for close typos."""
+    ctx = FakeCtx()
+    plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", "sqirt(2)")]))
+    embed = _embed(_first_response(ctx))
+    desc = embed["description"]
+    assert "sqirt" in desc
+    assert "sqrt" in desc  # the suggestion
+
+
+def test_calc_pi_case_mismatch_suggests_pi_in_error_embed():
+    """v0.2.8: case-mismatch is the strongest did-you-mean signal."""
+    ctx = FakeCtx()
+    plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", "Pi + 1")]))
+    embed = _embed(_first_response(ctx))
+    desc = embed["description"]
+    assert "case-sensitive" in desc.lower()
+    assert "`pi`" in desc
+
+
+def test_calc_unclosed_paren_diagnoses_imbalance_in_error_embed():
+    """v0.2.8: parser pattern detection identifies missing close-paren."""
+    ctx = FakeCtx()
+    plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", "((1+2)")]))
+    embed = _embed(_first_response(ctx))
+    desc = embed["description"]
+    assert "Unclosed" in desc
+
+
+def test_calc_sqrt_negative_diagnostic_names_function_and_suggests_abs():
+    """v0.2.8: domain error carries function name → context-specific advice."""
+    ctx = FakeCtx()
+    plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", "sqrt(-1)")]))
+    embed = _embed(_first_response(ctx))
+    desc = embed["description"]
+    assert "sqrt" in desc
+    assert "abs" in desc
+
+
+def test_calc_div_by_zero_diagnostic_names_operator():
+    """v0.2.8: div-by-zero carries the operator symbol."""
+    ctx = FakeCtx()
+    plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", "1/0")]))
+    embed = _embed(_first_response(ctx))
+    desc = embed["description"]
+    assert "`/`" in desc
+
+
 def test_calc_works_when_ephemeral_raises():
     # T5-05: ephemeral subsystem failures must not block evaluation.
     # The plugin falls open (cooldown ineffective) but still answers.

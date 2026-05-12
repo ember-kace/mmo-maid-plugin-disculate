@@ -177,11 +177,15 @@ def cmd_calc(ctx: Context, event: Dict[str, Any]):
         _record_metric(ctx, R.COOLDOWN, started)
         return
 
-    tree, parse_reason = parse(raw_expression)
+    tree, parse_reason, parse_detail = parse(raw_expression)
     if parse_reason is not None:
         _safe_respond(
             ctx,
-            embeds=[eb.build_error_embed(raw_expression if isinstance(raw_expression, str) else "", parse_reason)],
+            embeds=[eb.build_error_embed(
+                raw_expression if isinstance(raw_expression, str) else "",
+                parse_reason,
+                parse_detail,
+            )],
             ephemeral=True,
         )
         _set_cooldown(ctx, user_id)
@@ -190,11 +194,11 @@ def cmd_calc(ctx: Context, event: Dict[str, Any]):
 
     config = cfg.get_config(ctx)
     trace: List[Any] = []
-    value, eval_reason = run_safe(tree, angle_mode=config["angle_mode"], trace=trace)
+    value, eval_reason, eval_detail = run_safe(tree, angle_mode=config["angle_mode"], trace=trace)
     if eval_reason is not None:
         _safe_respond(
             ctx,
-            embeds=[eb.build_error_embed(raw_expression, eval_reason)],
+            embeds=[eb.build_error_embed(raw_expression, eval_reason, eval_detail)],
             ephemeral=True,
         )
         _set_cooldown(ctx, user_id)

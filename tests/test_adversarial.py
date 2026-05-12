@@ -25,7 +25,7 @@ def _run(ctx, expression):
     "1+⁦hidden⁩",  # FSI/PDI
 ])
 def test_bidi_input_rejected(payload):
-    _, reason = parse(payload)
+    _, reason, _ = parse(payload)
     assert reason == R.INVALID_CHARS
 
 
@@ -37,12 +37,12 @@ def test_bidi_input_rejected(payload):
     "1+\x7f1",     # DEL mid-string
 ])
 def test_control_chars_in_body_rejected(payload):
-    _, reason = parse(payload)
+    _, reason, _ = parse(payload)
     assert reason == R.INVALID_CHARS
 
 
 def test_full_width_digits_normalized_and_accepted():
-    tree, reason = parse("１+１")  # １+１ → 1+1
+    tree, reason, _ = parse("１+１")  # １+１ → 1+1
     assert reason is None
     assert tree is not None
 
@@ -130,12 +130,12 @@ def test_call_with_keyword_arg_blocked():
 
 def test_format_string_injection_blocked():
     # f-strings parse as JoinedStr / FormattedValue
-    _, reason = parse("f'{1+1}'")
+    _, reason, _ = parse("f'{1+1}'")
     assert reason in (R.UNSUPPORTED_NODE, R.PARSE_ERROR)
 
 
 def test_long_function_name_blocked():
-    _, reason = parse("a" * 100 + "(1)")
+    _, reason, _ = parse("a" * 100 + "(1)")
     # Either too_long (input cap) or unsupported_function
     assert reason in (R.TOO_LONG, R.UNSUPPORTED_FUNC, R.PARSE_ERROR)
 
@@ -176,5 +176,5 @@ def test_non_string_expression_rejected():
 
 def test_unicode_lookalike_function_name_blocked():
     # Cyrillic 'sin' looks like Latin 'sin'
-    _, reason = parse("ѕіη(0)")  # ѕі η — lookalikes
+    _, reason, _ = parse("ѕіη(0)")  # ѕі η — lookalikes
     assert reason in (R.UNSUPPORTED_FUNC, R.UNSUPPORTED_NAME, R.PARSE_ERROR)

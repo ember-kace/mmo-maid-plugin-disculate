@@ -194,18 +194,28 @@ def build_result_embed(
     return enforce_total_cap(embed)
 
 
-def build_error_embed(expression: str, reason: str) -> Dict[str, Any]:
+def build_error_embed(
+    expression: str,
+    reason: str,
+    detail: Optional[str] = None,
+) -> Dict[str, Any]:
     # Color + reason-code footer already establish "this is an error";
-    # the old "Calc error" title was redundant. Hint becomes the primary
-    # content; the backticked input speaks for itself (no "Input:" label).
-    hint = R.hint_for(reason)
+    # the old "Calc error" title was redundant. The diagnostics module
+    # produces a specific (what, how) pair given the reason + detail +
+    # the raw expression; we render those above the input echo.
+    from . import diagnostics
+    what, how = diagnostics.explain(expression, reason, detail)
+
     # Expression renders inside backticks; use the inline-code-aware
     # scrubber so `**` etc. show literally (matches v0.2.7 result embed).
     expr = clip(safe_text_in_code(expression), 200) if expression else ""
-    desc_parts: List[str] = [hint]
+
+    desc_parts: List[str] = [what]
+    if how:
+        desc_parts.append(how)
     if expr:
-        desc_parts.append(f"\n`{expr}`")
-    desc = "".join(desc_parts)
+        desc_parts.append(f"`{expr}`")
+    desc = "\n".join(desc_parts)
     embed = {
         "description": clip(desc, EMBED_DESC_MAX),
         "color": COLOR_ERROR,

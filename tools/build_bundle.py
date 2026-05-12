@@ -24,6 +24,7 @@ INCLUDED_FILES = [
     "requirements.txt",
     "lib/__init__.py",
     "lib/config.py",
+    "lib/diagnostics.py",
     "lib/embed.py",
     "lib/format.py",
     "lib/functions.py",

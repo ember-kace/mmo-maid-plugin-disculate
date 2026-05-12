@@ -8,9 +8,10 @@ from lib.walker import run_safe
 
 
 def _run(expr, angle_mode="rad", budget=0.2):
-    tree, reason = parse(expr)
+    tree, reason, _ = parse(expr)
     assert reason is None, f"parse failed: {reason}"
-    return run_safe(tree, angle_mode=angle_mode, budget_seconds=budget)
+    value, walk_reason, _ = run_safe(tree, angle_mode=angle_mode, budget_seconds=budget)
+    return value, walk_reason
 
 
 @pytest.mark.parametrize("expr, expected", [
@@ -133,17 +134,17 @@ def test_inf_nan_results_caught_post_binop():
 def test_inf_literal_rejected_at_parse_time():
     # T1-01: ast.parse("1e1000") -> Constant(value=inf). Validator must
     # reject this so it can't seed downstream arithmetic.
-    tree, reason = parse("1e1000")
+    tree, reason, _ = parse("1e1000")
     assert tree is None
     assert reason == R.OVERFLOW
     # Also ensure -inf and 1e500 are rejected
     for expr in ("1e500", "-1e1000", "1e308 ** 2"):
-        tree, reason = parse(expr)
+        tree, reason, _ = parse(expr)
         # Either rejected at parse (literal overflow) or at walk (binop overflow)
         if tree is None:
             assert reason in (R.OVERFLOW, R.PARSE_ERROR), f"{expr} -> {reason}"
         else:
-            _, walk_reason = run_safe(tree)
+            _, walk_reason, _ = run_safe(tree)
             assert walk_reason in (R.OVERFLOW, R.DOMAIN_ERROR), f"{expr} -> {walk_reason}"
 
 
@@ -179,21 +180,21 @@ def test_timeout_trips_when_budget_tiny():
     # Force the budget so low that the first node visit trips. The wall-clock
     # check runs at every node visit; with a negative budget the very first
     # call to check() should raise TIMEOUT.
-    tree, _ = parse("1+1+1+1+1")
-    value, reason = run_safe(tree, budget_seconds=-1.0)
+    tree, _, _ = parse("1+1+1+1+1")
+    value, reason, _ = run_safe(tree, budget_seconds=-1.0)
     assert value is None
     assert reason == R.TIMEOUT
 
 
 def test_walker_returns_internal_on_unknown_error(monkeypatch):
     from lib import walker
-    tree, _ = parse("1+1")
+    tree, _, _ = parse("1+1")
 
     def boom(*args, **kwargs):
         raise RuntimeError("synthetic")
 
     monkeypatch.setattr(walker, "_walk", boom)
-    value, reason = walker.run_safe(tree)
+    value, reason, _ = walker.run_safe(tree)
     assert value is None
     assert reason == R.INTERNAL
 
@@ -218,17 +219,17 @@ def test_unary_combinations():
 
 def test_trace_none_is_backward_compatible():
     # Existing call sites (no trace= kwarg) keep working unchanged.
-    tree, _ = parse("2+2")
-    value, reason = run_safe(tree)
+    tree, _, _ = parse("2+2")
+    value, reason, _ = run_safe(tree)
     assert reason is None
     assert value == 4
 
 
 def test_trace_records_binop_steps_in_inner_first_order():
     from lib.walker import BinOpStep
-    tree, _ = parse("(2+1)*7-8")
+    tree, _, _ = parse("(2+1)*7-8")
     trace = []
-    value, reason = run_safe(tree, trace=trace)
+    value, reason, _ = run_safe(tree, trace=trace)
     assert reason is None and value == 13
     assert all(isinstance(s, BinOpStep) for s in trace)
     # `2+1` -> 3, then `3*7` -> 21, then `21-8` -> 13.
@@ -241,9 +242,9 @@ def test_trace_records_binop_steps_in_inner_first_order():
 
 def test_trace_records_call_steps_inner_first():
     from lib.walker import BinOpStep, CallStep
-    tree, _ = parse("sqrt(abs(-16)) + 1")
+    tree, _, _ = parse("sqrt(abs(-16)) + 1")
     trace = []
-    value, reason = run_safe(tree, trace=trace)
+    value, reason, _ = run_safe(tree, trace=trace)
     assert reason is None and value == 5.0
     kinds = [type(s).__name__ for s in trace]
     assert kinds == ["CallStep", "CallStep", "BinOpStep"]
@@ -255,9 +256,9 @@ def test_trace_records_call_steps_inner_first():
 def test_trace_skips_unary_and_constants():
     from lib.walker import BinOpStep
     # `-(2+3)` -> one BinOp inside a UnaryOp. UnaryOp doesn't emit a step.
-    tree, _ = parse("-(2+3)")
+    tree, _, _ = parse("-(2+3)")
     trace = []
-    value, reason = run_safe(tree, trace=trace)
+    value, reason, _ = run_safe(tree, trace=trace)
     assert reason is None and value == -5
     assert len(trace) == 1
     assert isinstance(trace[0], BinOpStep)
@@ -266,7 +267,7 @@ def test_trace_skips_unary_and_constants():
 
 def test_trace_skips_constant_lookup():
     # `pi + 1`: one BinOp, zero CallSteps. The `pi` lookup is not a step.
-    tree, _ = parse("pi + 1")
+    tree, _, _ = parse("pi + 1")
     trace = []
     run_safe(tree, trace=trace)
     assert len(trace) == 1

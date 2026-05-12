@@ -93,8 +93,14 @@ def parse_and_validate(cleaned: str) -> ast.Expression:
     preprocessed = preprocess_percent(cleaned)
     try:
         tree = ast.parse(preprocessed, mode="eval")
-    except SyntaxError:
-        raise ValidationError(reasons.PARSE_ERROR)
+    except SyntaxError as e:
+        # Carry the SyntaxError msg + offset into the detail so
+        # lib/diagnostics.py can show a position pointer when pattern
+        # detection on the raw expression doesn't catch the issue first.
+        msg = (e.msg or "").strip().lower()
+        offset = e.offset
+        detail = f"{msg}@{offset}" if offset is not None else msg
+        raise ValidationError(reasons.PARSE_ERROR, detail)
     except ValueError:
         raise ValidationError(reasons.PARSE_ERROR)
     if not isinstance(tree, ast.Expression):
@@ -191,12 +197,20 @@ def _validate(node: ast.AST, depth: int, state: _State) -> None:
     raise ValidationError(reasons.UNSUPPORTED_NODE, type(node).__name__)
 
 
-def parse(raw: object) -> Tuple[Optional[ast.Expression], Optional[str]]:
-    """Convenience: clean + parse + validate, returning (tree, error_reason)."""
+def parse(raw: object) -> Tuple[Optional[ast.Expression], Optional[str], Optional[str]]:
+    """Convenience: clean + parse + validate.
+
+    Returns a triple `(tree, reason, detail)`:
+    - on success: `(tree, None, None)`
+    - on failure: `(None, reason_code, detail_string_or_None)` where
+      `detail` is the context-specific info captured at the raise site
+      (function/name typed, operator symbol, SyntaxError offset, etc.).
+      Consumed by lib/diagnostics.py to render a context-specific error.
+    """
     try:
         cleaned = clean_expression(raw)
     except CleanError as e:
-        return None, e.reason
+        return None, e.reason, e.args[0] if e.args else None
     try:
         tree = parse_and_validate(cleaned)
     except ValidationError as e:
@@ -204,9 +218,9 @@ def parse(raw: object) -> Tuple[Optional[ast.Expression], Optional[str]]:
         # can surface — e.g. `2(3)` or `2pi` are calculator-keyboard
         # idioms that mean "implicit multiplication."
         if e.reason == reasons.PARSE_ERROR and _IMPLICIT_MULT_RE.search(cleaned):
-            return None, reasons.WANT_EXPLICIT_MULT
-        return None, e.reason
-    return tree, None
+            return None, reasons.WANT_EXPLICIT_MULT, None
+        return None, e.reason, e.detail or None
+    return tree, None, None
 
 
 def uses_trig(tree: ast.Expression) -> bool:

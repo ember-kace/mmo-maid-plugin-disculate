@@ -171,11 +171,11 @@ def _apply_binop(op: ast.operator, left: Any, right: Any) -> Any:
             return left * right
         if isinstance(op, ast.Div):
             if right == 0:
-                raise WalkError(reasons.DIV_BY_ZERO)
+                raise WalkError(reasons.DIV_BY_ZERO, "/")
             return left / right
         if isinstance(op, ast.FloorDiv):
             if right == 0:
-                raise WalkError(reasons.DIV_BY_ZERO)
+                raise WalkError(reasons.DIV_BY_ZERO, "//")
             return left // right
         if isinstance(op, ast.Pow):
             try:
@@ -183,9 +183,9 @@ def _apply_binop(op: ast.operator, left: Any, right: Any) -> Any:
             except OverflowError:
                 raise WalkError(reasons.OVERFLOW)
             except ValueError:
-                raise WalkError(reasons.DOMAIN_ERROR)
+                raise WalkError(reasons.DOMAIN_ERROR, "pow")
             except ZeroDivisionError:
-                raise WalkError(reasons.DIV_BY_ZERO)
+                raise WalkError(reasons.DIV_BY_ZERO, "**")
     except OverflowError:
         raise WalkError(reasons.OVERFLOW)
     except ZeroDivisionError:
@@ -205,16 +205,17 @@ def _apply_call(name: str, args: list, angle_mode: str) -> Any:
     except KeyError:
         raise WalkError(reasons.UNSUPPORTED_FUNC, name)
     except ZeroDivisionError:
-        raise WalkError(reasons.DIV_BY_ZERO)
+        # Carry the function name so diagnostics can render
+        # "Division by zero in `mod(...)`" instead of a bare message.
+        raise WalkError(reasons.DIV_BY_ZERO, name)
     except OverflowError:
         raise WalkError(reasons.OVERFLOW)
     except ValueError as e:
-        msg = str(e).lower()
-        if "domain" in msg or "math" in msg:
-            raise WalkError(reasons.DOMAIN_ERROR, str(e))
-        raise WalkError(reasons.DOMAIN_ERROR, str(e))
+        # Prefix with the function name so the domain-error diagnostic
+        # can match against _DOMAIN_GUIDANCE (sqrt, log, asin, ...).
+        raise WalkError(reasons.DOMAIN_ERROR, f"{name}: {e}")
     except TypeError as e:
-        raise WalkError(reasons.DOMAIN_ERROR, str(e))
+        raise WalkError(reasons.DOMAIN_ERROR, f"{name}: {e}")
     return result
 
 
@@ -223,18 +224,23 @@ def run_safe(
     angle_mode: str = "rad",
     budget_seconds: float = BUDGET_SECONDS,
     trace: Optional[List[Step]] = None,
-) -> Tuple[Optional[Any], Optional[str]]:
-    """Run the walker and return (value, error_reason). Never raises.
+) -> Tuple[Optional[Any], Optional[str], Optional[str]]:
+    """Run the walker and return (value, error_reason, error_detail).
+    Never raises.
 
     `trace`, if provided, is populated by the walker (see `run`). On the
     error path the trace contains whatever steps completed before the
     failure; callers typically discard it.
+
+    `error_detail` is the context-specific info captured at the raise
+    site (operator symbol for div-by-zero, function name for domain
+    errors, etc.). Consumed by lib/diagnostics.py.
     """
     try:
-        return run(tree, angle_mode, budget_seconds, trace=trace), None
+        return run(tree, angle_mode, budget_seconds, trace=trace), None, None
     except WalkError as e:
-        return None, e.reason
+        return None, e.reason, e.detail or None
     except RecursionError:
-        return None, reasons.DEPTH_EXCEEDED
+        return None, reasons.DEPTH_EXCEEDED, None
     except Exception:
-        return None, reasons.INTERNAL
+        return None, reasons.INTERNAL, None

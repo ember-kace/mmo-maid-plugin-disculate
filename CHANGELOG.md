@@ -4,6 +4,36 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.2.8] — 2026-05-12
+
+Error embeds now diagnose the *specific* problem in the user's input and suggest a concrete fix, instead of showing the same generic hint per reason code. The metric-shape stays unchanged (bounded enum `result` tag); diagnostics are descriptive text only.
+
+### Added
+- `lib/diagnostics.py` — per-reason explainer that takes `(expression, reason, detail)` and returns `(what, how)`. Compact: at most a one-line "what went wrong" + one-line "how to fix" above the input echo. Falls back to the canonical hint when no specific handler matches.
+- **Did-you-mean for typos** — `difflib.get_close_matches(cutoff=0.7)` catches `sqirt` → `sqrt`, `flor` → `floor`, `taw` → `tau`. Far typos (`forblar`) get no suggestion (low false-positive rate).
+- **Case-mismatch detection** — `Pi`, `E`, `TAU` produce "Constants are case-sensitive. Did you mean `pi`/`e`/`tau`?" before fuzzy matching even runs.
+- **Parser pattern detection** — counts `(` vs `)` to identify "Unclosed parenthesis. N more `(` than `)`" or "Too many `)`". Detects expressions ending with a trailing operator and names the operator.
+- **Domain-error guidance per function** — `sqrt(-1)` suggests `sqrt(abs(x))`; `log(0)` explains the positive-argument requirement; `asin(2)`/`acos(2)` explains the `[-1, 1]` domain.
+- **Div-by-zero context** — names the operator (`/`, `//`) or the function (`mod`) that triggered the zero divisor.
+- **Arity errors** — name the function (`sqrt was called with too many arguments`).
+- **Node-type translations** — `Compare` → "Comparison operators (`<`, `>`, `==`)"; `keyword args` → "Keyword arguments (e.g. `round(1.5, ndigits=1)`)"; etc.
+- `tests/test_diagnostics.py` — 23 unit cases covering each handler's positive paths + the fall-through.
+- 5 new integration tests in `tests/test_handlers.py` verifying the full handler → embed pipeline surfaces the diagnostic strings.
+
+### Changed
+- **`lib/parser.py:parse()` now returns a 3-tuple `(tree, reason, detail)`** instead of `(tree, reason)`. The `detail` carries the context-specific info captured at the raise site (typed name, SyntaxError offset, etc.). All existing 2-tuple unpacking call sites were updated to 3-tuple (test count grew but no behavior changed for the success path).
+- **`lib/walker.py:run_safe()` now returns a 3-tuple `(value, reason, detail)`** with the same semantics.
+- **`lib/embed.py:build_error_embed(expression, reason, detail=None)`** — new optional `detail` parameter. Calls `diagnostics.explain` to produce the rendered description.
+- `lib/parser.py:parse_and_validate` captures `SyntaxError.msg` and `.offset` into `ValidationError.detail` so position-aware diagnostics are possible.
+- `lib/walker.py:_apply_binop` raises `WalkError(DIV_BY_ZERO, "/")` etc. so the explainer knows which operator triggered the zero divisor.
+- `lib/walker.py:_apply_call` raises `WalkError(DIV_BY_ZERO, name)` and `WalkError(DOMAIN_ERROR, f"{name}: {msg}")` so the function name flows to the explainer.
+- `tools/build_bundle.py:INCLUDED_FILES` now lists `lib/diagnostics.py` so it ships in the marketplace bundle.
+
+### Notes
+- Per-reason fall-through is preserved: any reason without a registered handler renders the canonical `hint_for(reason)` text. No reason code change.
+- The `what` and `how` lines are static strings produced by Disculate code — they don't pass through `safe_text_in_code` themselves. User-supplied content interpolated into them (typed name, expression) is already sanitised at its other rendering points in the embed.
+- Test count: 216 → 247.
+
 ## [0.2.7] — 2026-05-12
 
 Display fix: the `**` operator (Pow) is now visible in the expression echo on `/calc` result and error cards. Prior versions silently stripped `**` (along with `__`, `~~`, `||`) as a defensive markdown scrub, which made the displayed expression lie about what the user typed — e.g. `/calc 2**8` rendered as `` `2  8` `` (two-space gap, no operator). This produced confusing back-to-back screenshots where identical-looking inputs gave different results.

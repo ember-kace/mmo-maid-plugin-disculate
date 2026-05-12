@@ -282,9 +282,18 @@ def test_calc_percent_modulo_collision_emits_want_mod():
 
 
 def test_calc_implicit_multiplication_emits_want_explicit_mult():
-    # T3-02: `2(3)` and `2pi` are calculator-keyboard idioms that mean
-    # implicit multiplication. Both should produce a specific hint.
-    for expr in ("2(3)", "2pi", "3 (5)"):
+    # T3-02: implicit-multiplication idioms get a specific hint instead
+    # of a generic parse_error. v0.2.6 extends coverage to the symmetric
+    # `)<digit>` / `)<letter>` cases on top of the original
+    # `<digit>(` / `<digit><letter>` cases.
+    for expr in (
+        "2(3)",          # digit then paren
+        "2pi",           # digit then letter
+        "3 (5)",         # digit then space then paren
+        "(1 + 1) 10",    # close-paren then space then digit  (v0.2.6)
+        "(1 + 1)10",     # close-paren then digit             (v0.2.6)
+        "(1 + 1) pi",    # close-paren then space then name   (v0.2.6)
+    ):
         ctx = FakeCtx()
         plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", expr)]))
         embed = _embed(_first_response(ctx))

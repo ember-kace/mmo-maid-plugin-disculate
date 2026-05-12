@@ -4,6 +4,17 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.2.6] — 2026-05-12
+
+User-visible UX fix surfaced by a real `/calc` in production: `1000 * (1 + 7%)  10` (missing operator between `)` and `10`) returned a generic `parse_error` with no helpful pointer. The v0.2.0 implicit-multiplication detection caught `2(3)` and `2pi` but didn't catch the symmetric `)<digit>` / `)<letter>` cases.
+
+### Changed
+- `lib/parser.py:_IMPLICIT_MULT_RE` extended from `\d\s*\(|\d\s*[A-Za-z_]` to `\d\s*\(|\d\s*[A-Za-z_]|\)\s*\d|\)\s*[A-Za-z_]`. Now also matches `(1+1) 10`, `(1+1)10`, `(1+1) pi`, and `(1+1)pi` — emitting `WANT_EXPLICIT_MULT` ("Use `*` for multiplication") instead of a generic `parse_error`.
+- `tests/test_handlers.py:test_calc_implicit_multiplication_emits_want_explicit_mult` parametrize list grew from 3 → 6 cases.
+
+### Verified
+- SDK assumption **A11** (`embed.thumbnail` forwarded by SDK) — confirmed live by a `/calc-help` invocation in the test guild after v0.2.5 shipped. The Disculate avatar renders top-right; the negative case (error embed has no thumbnail) also confirmed in the same screenshot.
+
 ## [0.2.5] — 2026-05-12
 
 Branded the result, help, and config-updated embeds. The Disculate maid-chibi avatar now appears in the top-right corner so cards immediately read as "Disculate" rather than as a generic embed.

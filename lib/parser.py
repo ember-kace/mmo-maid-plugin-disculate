@@ -38,8 +38,12 @@ _PERCENT_RE = re.compile(
 )
 
 # Post-parse-failure analysis: spot implicit-multiplication patterns so
-# the user gets a specific hint instead of a generic PARSE_ERROR.
-_IMPLICIT_MULT_RE = re.compile(r"\d\s*\(|\d\s*[A-Za-z_]")
+# the user gets a specific hint instead of a generic PARSE_ERROR. Covers:
+#   `2(3)`     — digit then `(`
+#   `2pi`      — digit then letter/underscore
+#   `(1+1) 10` — `)` then digit (close-paren then number, the symmetric case)
+#   `(1+1) pi` — `)` then letter/underscore (close-paren then name)
+_IMPLICIT_MULT_RE = re.compile(r"\d\s*\(|\d\s*[A-Za-z_]|\)\s*\d|\)\s*[A-Za-z_]")
 
 _DISALLOWED_UNICODE_CATEGORIES = ("Cc", "Cf", "Co", "Cs")
 

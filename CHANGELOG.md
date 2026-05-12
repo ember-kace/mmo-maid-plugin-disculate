@@ -4,6 +4,27 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.2.12] — 2026-05-12
+
+`/calc-help` slimmed back down. v0.2.11's Examples field and bulleted Notes pushed too much vertical content into the card — fine on a wide desktop monitor, crowded on mobile where Discord stacks every inline field vertically.
+
+### Changed
+- **Examples field removed.** v0.2.11 added a full-width block of five illustrative expressions. In practice the function-category fields already document the syntax, and users learn by typing rather than reading the help twice. The block was ~5 lines of full-width content that wrapped awkwardly on mobile.
+- **Notes recompressed to a single paragraph** (from v0.2.11's five bullet lines). Content trimmed from ~430 chars to ~330 chars; the v0.2.9 floor-division sentence is preserved because that semantics is a real surprise. The bullet about did-you-mean error suggestions is dropped — the error embed itself surfaces those at the point of failure; documenting them in help is duplicate signal.
+
+### Kept from v0.2.11
+- **Title "Disculate"** (not "Disculate — quick reference"), no hyperlink on the title.
+- **Italic attribution line** `*Available on [MMO Maid](https://mmomaid.cloud/)*` at the top of the description.
+- **Operators as its own embed field** alongside the four function categories — this was the win of the v0.2.11 pass and stays.
+- **Brand thumbnail** top-right.
+- **`MMOMAID_URL` constant**.
+
+### Mobile note
+Discord renders embed inline fields side-by-side on desktop (≤3 per row) but stacks them vertically on mobile. After this revision, mobile readers see: title + attribution + Percent/Constants lines + Operators block + 4 function-category blocks + Notes paragraph + footer. Each block stays short enough to scan without wrapping mid-word.
+
+### Test count
+276 (unchanged — one test renamed from `_has_examples_field` to `_has_no_examples_field` as a regression lock).
+
 ## [0.2.11] — 2026-05-12
 
 `/calc-help` polish pass: cleaner title, attribution moves to a small italic line below it, operators promoted from a cramped description row to their own field, new Examples field, Notes broken into bullets.

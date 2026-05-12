@@ -479,21 +479,16 @@ def test_help_embed_has_operators_field():
         assert op in value, f"operator/label {op!r} missing from Operators field"
 
 
-def test_help_embed_has_examples_field():
-    """v0.2.11: Examples field shows a few illustrative expressions."""
+def test_help_embed_has_no_examples_field():
+    """v0.2.12: walked back from v0.2.11's Examples field — user
+    feedback was 'too much information', and the card needs to read
+    well on mobile (where every inline field stacks vertically).
+    Regression lock against re-introducing the field."""
     ctx = FakeCtx()
     plugin_module.cmd_calc_help(ctx, slash_event("calc-help"))
     embed = _embed(_first_response(ctx))
-    examples_field = next(
-        (f for f in embed.get("fields", []) if f["name"] == "Examples"),
-        None,
-    )
-    assert examples_field is not None
-    assert examples_field.get("inline") is False
-    # Spot-check a few expressions
-    value = examples_field["value"]
-    assert "sqrt(16)" in value
-    assert "sin(pi/2)" in value
+    field_names = {f["name"] for f in embed.get("fields", [])}
+    assert "Examples" not in field_names
 
 
 def test_config_updated_embed_has_no_brand_thumbnail():

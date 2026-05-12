@@ -378,31 +378,19 @@ def _build_help_payload() -> Dict[str, Any]:
             "inline": True,
         })
 
-    # Examples field — short, full-width, sits below the inline grid.
-    examples_value = "\n".join([
-        "`(2+1)*7-8`  →  `13`",
-        "`sqrt(16)`  →  `4`",
-        "`1000 * (1 + 5%) ** 10`  →  compound interest, 10 years at 5%",
-        "`sin(pi/2)`  →  `1`",
-        "`mod(-7, 3)`  →  `2`  *(sign follows divisor)*",
-    ])
-    fields.append({
-        "name": "Examples",
-        "value": clip(examples_value, EMBED_FIELD_VALUE_MAX),
-        "inline": False,
-    })
-
-    # Notes — broken into bullet lines so each quirk is scannable on its
-    # own, rather than one wall of prose.
-    notes_value = "\n".join([
-        "• Trig honours `/calc-config angle_mode` (radians by default).",
-        "• Modulo via `mod(a, b)`. `^` is not power — use `**`.",
-        "• Floor-division `//` rounds toward negative infinity: `-7 // 2` = `-4`, not `-3`.",
-        "• Errors include a *did-you-mean* suggestion for close-typo "
-        "function and constant names.",
-        "• Bitwise ops, factorial, variables, `inf`/`nan` literals, and "
-        "comparisons are not supported.",
-    ])
+    # Notes — single-paragraph form (v0.2.12 walk-back from v0.2.11's
+    # bullet-list expansion). Keeping the v0.2.9 floor-div line because
+    # it documents a real semantics surprise; everything else stays
+    # compact so the card fits cleanly on mobile (each inline field
+    # already stacks vertically; an oversize Notes block compounds it).
+    notes_value = (
+        "Trig honours `/calc-config angle_mode` (radians by default). "
+        "Modulo via `mod(a, b)`. `^` is not power — use `**`. "
+        "Floor-division `//` rounds toward negative infinity "
+        "(Python semantics): `-7 // 2` = `-4`, not `-3`. "
+        "Bitwise ops, factorial, variables, `inf`/`nan` literals, and "
+        "comparisons are not supported."
+    )
     fields.append({
         "name": "Notes",
         "value": clip(notes_value, EMBED_FIELD_VALUE_MAX),

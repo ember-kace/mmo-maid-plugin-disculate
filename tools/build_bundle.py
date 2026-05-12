@@ -1,8 +1,8 @@
 """Build the production bundle.
 
-Deterministic zip (all mtimes set to epoch 0) with an explicit allowlist.
-Anything not on the allowlist is rejected — guards against accidentally
-shipping tests/, tools/, .md, or backup files.
+Deterministic zip (all mtimes set to the zip-format epoch, 1980-01-01)
+with an explicit allowlist. Anything not on the allowlist is rejected —
+guards against accidentally shipping tests/, tools/, .md, or backup files.
 
 Run from project root:
     py tools/build_bundle.py

@@ -293,9 +293,9 @@ def cmd_calc_config(ctx: Context, event: Dict[str, Any]):
     scientific_threshold = opts.get("scientific_threshold")
 
     updates, errors = cfg.validate_updates(
-        precision=precision if precision is not None else None,
-        angle_mode=angle_mode if angle_mode is not None else None,
-        scientific_threshold=scientific_threshold if scientific_threshold is not None else None,
+        precision=precision,
+        angle_mode=angle_mode,
+        scientific_threshold=scientific_threshold,
     )
     if errors:
         _safe_respond(

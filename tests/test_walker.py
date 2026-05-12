@@ -270,6 +270,22 @@ def test_unary_combinations():
     assert value == 5
 
 
+def test_walker_never_returns_bool():
+    """V3-01 / V4-04: format_result's bool branch was historically a
+    defensive check — but the walker only ever returns int or float.
+    Parser rejects True/False literals; arithmetic on int/float can't
+    produce bool. Lock the invariant so the dropped branch in
+    format.py stays defensible."""
+    for expr in (
+        "2+2", "1/3", "sqrt(2)", "pi", "sin(0)", "min(3, 1, 2)",
+        "(2+1)*7-8", "abs(-5)", "round(3.5)", "-(2+3)", "2**8",
+        "log(10, 10)", "max(1, 2, 3)", "mod(7, 3)",
+    ):
+        value, reason = _run(expr)
+        assert reason is None, expr
+        assert not isinstance(value, bool), f"{expr} -> bool {value!r}"
+
+
 # --- Step trace (v0.2.4) ---------------------------------------------
 
 

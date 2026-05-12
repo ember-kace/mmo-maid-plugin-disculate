@@ -145,7 +145,7 @@ def check_blocked_substrings():
     """
     # Import lazily so a broken build_bundle import doesn't take down
     # the rest of the audit.
-    from build_bundle import INCLUDED_FILES
+    from tools.build_bundle import INCLUDED_FILES
 
     bad = []
     for rel in INCLUDED_FILES:
@@ -273,5 +273,4 @@ def main():
 
 if __name__ == "__main__":
     sys.path.insert(0, ROOT)
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     main()

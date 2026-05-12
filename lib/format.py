@@ -17,8 +17,10 @@ Number = Union[int, float]
 
 
 def format_result(value: Number, precision: int = 6, scientific_threshold: int = 12) -> str:
-    if isinstance(value, bool):
-        return str(int(value))
+    # Walker only ever returns int or float — parser._validate rejects
+    # bool literals (`True`/`False`) at parse time, and arithmetic on
+    # int/float can't produce bool. Test invariant in
+    # test_walker.py:test_walker_never_returns_bool locks this.
     if isinstance(value, int):
         return _format_int(value, precision, scientific_threshold)
     if isinstance(value, float):
@@ -54,7 +56,9 @@ def _format_float(v: float, precision: int, scientific_threshold: int) -> str:
     if abs_v >= big or abs_v < small:
         return _scientific(v, max(1, precision))
 
-    if v.is_integer() and abs_v < big:
+    # `abs_v < big` is implied by reaching this line (the branch above
+    # returns for abs_v >= big), so don't re-check it.
+    if v.is_integer():
         as_int = int(v)
         return f"{as_int:,}"
 

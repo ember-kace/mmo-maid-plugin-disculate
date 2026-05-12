@@ -5,7 +5,7 @@ color, fields, footer). The SDK's exact embed-passing API is documented
 in SDK-ASSUMPTIONS.md; handlers call respond with embeds=[...] and a
 defensive content fallback.
 
-Every user-visible string passes through _safe_text + _clip first.
+Every user-visible string passes through safe_text + clip first.
 allowed_mentions is always set to suppress role/user/everyone pings on
 echoed input.
 """
@@ -14,6 +14,7 @@ import re
 import unicodedata
 from typing import Any, Dict, List, Optional
 
+from . import diagnostics
 from . import reasons as R
 from .format import format_result
 from .functions import CATEGORY_ORDER, CONSTANTS, FUNCTIONS
@@ -45,7 +46,7 @@ MAX_STEPS_RENDERED = 30  # safety; real expressions cap well below this
 
 ALLOWED_MENTIONS_NONE: Dict[str, Any] = {"parse": []}
 
-_BIDI_CONTROL = re.compile(r"[‪-‮⁦-⁩]")
+_BIDI_CONTROL = re.compile("[\u202a-\u202e\u2066-\u2069]")
 _MARKDOWN_LINK = re.compile(r"\[([^\]]*)\]\(([^)]*)\)")
 _BARE_URL = re.compile(r"https?://\S+")
 _MARKDOWN_MARKERS = ("```", "**", "__", "~~", "||", "`")
@@ -58,7 +59,7 @@ def safe_text(s: str) -> str:
     s = _BIDI_CONTROL.sub("", s)
     s = _MARKDOWN_LINK.sub(r"\1", s)
     s = _BARE_URL.sub("[link]", s)
-    s = s.replace("@everyone", "@​everyone").replace("@here", "@​here")
+    s = s.replace("@everyone", "@\u200beveryone").replace("@here", "@\u200bhere")
     for marker in _MARKDOWN_MARKERS:
         s = s.replace(marker, "")
     return s
@@ -84,7 +85,7 @@ def safe_text_in_code(s: str) -> str:
     s = _BIDI_CONTROL.sub("", s)
     s = _MARKDOWN_LINK.sub(r"\1", s)
     s = _BARE_URL.sub("[link]", s)
-    s = s.replace("@everyone", "@​everyone").replace("@here", "@​here")
+    s = s.replace("@everyone", "@\u200beveryone").replace("@here", "@\u200bhere")
     # Only backticks would actually escape the inline-code context.
     s = s.replace("```", "")
     s = s.replace("`", "")
@@ -241,7 +242,6 @@ def build_error_embed(
     # the old "Calc error" title was redundant. The diagnostics module
     # produces a specific (what, how) pair given the reason + detail +
     # the raw expression; we render those above the input echo.
-    from . import diagnostics
     what, how = diagnostics.explain(expression, reason, detail)
 
     # Expression renders inside backticks; use the inline-code-aware

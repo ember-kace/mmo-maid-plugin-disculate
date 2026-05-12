@@ -12,12 +12,53 @@ shapes but still applies runtime guards:
 import ast
 import math
 import time
-from typing import Any, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any, List, Optional, Tuple, Union
 
 from . import reasons
 from .functions import CONSTANTS, _ArityError, _safe_pow, call_function
 
 BUDGET_SECONDS = 0.2
+
+
+@dataclass
+class BinOpStep:
+    """A single binary-operation step recorded during evaluation.
+
+    `left` and `right` are the already-evaluated operand values, not the
+    original AST. `op` is the rendered operator symbol (`+`, `-`, `*`,
+    `/`, `//`, `**`). Embeds the entire computation: `left op right = result`.
+    """
+    left: Any
+    op: str
+    right: Any
+    result: Any
+
+
+@dataclass
+class CallStep:
+    """A single function-call step recorded during evaluation.
+
+    `args` are the already-evaluated argument values. For nested calls
+    (e.g. `sqrt(abs(-16))`) the inner call's step appears first in the
+    trace list, then the outer call's.
+    """
+    name: str
+    args: List[Any]
+    result: Any
+
+
+Step = Union[BinOpStep, CallStep]
+
+
+_OP_SYMBOLS = {
+    ast.Add: "+",
+    ast.Sub: "-",
+    ast.Mult: "*",
+    ast.Div: "/",
+    ast.FloorDiv: "//",
+    ast.Pow: "**",
+}
 
 
 class WalkError(Exception):
@@ -42,14 +83,28 @@ def run(
     tree: ast.Expression,
     angle_mode: str = "rad",
     budget_seconds: float = BUDGET_SECONDS,
+    trace: Optional[List[Step]] = None,
 ) -> Any:
+    """Walk a validated AST and return its value.
+
+    If `trace` is a list (not None), the walker appends a `BinOpStep`
+    or `CallStep` to it for every successful binary-op or function-call
+    evaluation, in inner-first order. Caller owns the list; the walker
+    only appends. UnaryOp / Constant / Name lookups don't emit steps
+    (no meaningful computation).
+    """
     budget = _Budget(budget_seconds)
-    return _walk(tree.body, angle_mode, budget)
+    return _walk(tree.body, angle_mode, budget, trace)
 
 
-def _walk(node: ast.AST, angle_mode: str, budget: _Budget) -> Any:
+def _walk(
+    node: ast.AST,
+    angle_mode: str,
+    budget: _Budget,
+    trace: Optional[List[Step]],
+) -> Any:
     budget.check()
-    result = _dispatch(node, angle_mode, budget)
+    result = _dispatch(node, angle_mode, budget, trace)
     # Centralized post-op finite check. Catches nan/inf leaking from any
     # operator or function call — no need for per-branch checks.
     if isinstance(result, float):
@@ -60,7 +115,12 @@ def _walk(node: ast.AST, angle_mode: str, budget: _Budget) -> Any:
     return result
 
 
-def _dispatch(node: ast.AST, angle_mode: str, budget: _Budget) -> Any:
+def _dispatch(
+    node: ast.AST,
+    angle_mode: str,
+    budget: _Budget,
+    trace: Optional[List[Step]],
+) -> Any:
     if isinstance(node, ast.Constant):
         return node.value
 
@@ -71,7 +131,7 @@ def _dispatch(node: ast.AST, angle_mode: str, budget: _Budget) -> Any:
             raise WalkError(reasons.UNSUPPORTED_NAME, node.id)
 
     if isinstance(node, ast.UnaryOp):
-        v = _walk(node.operand, angle_mode, budget)
+        v = _walk(node.operand, angle_mode, budget, trace)
         if isinstance(node.op, ast.UAdd):
             return +v
         if isinstance(node.op, ast.USub):
@@ -79,13 +139,24 @@ def _dispatch(node: ast.AST, angle_mode: str, budget: _Budget) -> Any:
         raise WalkError(reasons.UNSUPPORTED_NODE, type(node.op).__name__)
 
     if isinstance(node, ast.BinOp):
-        left = _walk(node.left, angle_mode, budget)
-        right = _walk(node.right, angle_mode, budget)
-        return _apply_binop(node.op, left, right)
+        left = _walk(node.left, angle_mode, budget, trace)
+        right = _walk(node.right, angle_mode, budget, trace)
+        result = _apply_binop(node.op, left, right)
+        if trace is not None:
+            trace.append(BinOpStep(
+                left=left,
+                op=_OP_SYMBOLS.get(type(node.op), "?"),
+                right=right,
+                result=result,
+            ))
+        return result
 
     if isinstance(node, ast.Call):
-        args = [_walk(arg, angle_mode, budget) for arg in node.args]
-        return _apply_call(node.func.id, args, angle_mode)
+        args = [_walk(arg, angle_mode, budget, trace) for arg in node.args]
+        result = _apply_call(node.func.id, args, angle_mode)
+        if trace is not None:
+            trace.append(CallStep(name=node.func.id, args=args, result=result))
+        return result
 
     raise WalkError(reasons.UNSUPPORTED_NODE, type(node).__name__)
 
@@ -151,10 +222,16 @@ def run_safe(
     tree: ast.Expression,
     angle_mode: str = "rad",
     budget_seconds: float = BUDGET_SECONDS,
+    trace: Optional[List[Step]] = None,
 ) -> Tuple[Optional[Any], Optional[str]]:
-    """Run the walker and return (value, error_reason). Never raises."""
+    """Run the walker and return (value, error_reason). Never raises.
+
+    `trace`, if provided, is populated by the walker (see `run`). On the
+    error path the trace contains whatever steps completed before the
+    failure; callers typically discard it.
+    """
     try:
-        return run(tree, angle_mode, budget_seconds), None
+        return run(tree, angle_mode, budget_seconds, trace=trace), None
     except WalkError as e:
         return None, e.reason
     except RecursionError:

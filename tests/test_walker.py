@@ -211,3 +211,74 @@ def test_unary_combinations():
     value, reason = _run("-+-5")
     assert reason is None
     assert value == 5
+
+
+# --- Step trace (v0.2.4) ---------------------------------------------
+
+
+def test_trace_none_is_backward_compatible():
+    # Existing call sites (no trace= kwarg) keep working unchanged.
+    tree, _ = parse("2+2")
+    value, reason = run_safe(tree)
+    assert reason is None
+    assert value == 4
+
+
+def test_trace_records_binop_steps_in_inner_first_order():
+    from lib.walker import BinOpStep
+    tree, _ = parse("(2+1)*7-8")
+    trace = []
+    value, reason = run_safe(tree, trace=trace)
+    assert reason is None and value == 13
+    assert all(isinstance(s, BinOpStep) for s in trace)
+    # `2+1` -> 3, then `3*7` -> 21, then `21-8` -> 13.
+    assert [(s.left, s.op, s.right, s.result) for s in trace] == [
+        (2, "+", 1, 3),
+        (3, "*", 7, 21),
+        (21, "-", 8, 13),
+    ]
+
+
+def test_trace_records_call_steps_inner_first():
+    from lib.walker import BinOpStep, CallStep
+    tree, _ = parse("sqrt(abs(-16)) + 1")
+    trace = []
+    value, reason = run_safe(tree, trace=trace)
+    assert reason is None and value == 5.0
+    kinds = [type(s).__name__ for s in trace]
+    assert kinds == ["CallStep", "CallStep", "BinOpStep"]
+    assert trace[0].name == "abs" and trace[0].args == [-16] and trace[0].result == 16
+    assert trace[1].name == "sqrt" and trace[1].args == [16] and trace[1].result == 4.0
+    assert trace[2].op == "+" and trace[2].result == 5.0
+
+
+def test_trace_skips_unary_and_constants():
+    from lib.walker import BinOpStep
+    # `-(2+3)` -> one BinOp inside a UnaryOp. UnaryOp doesn't emit a step.
+    tree, _ = parse("-(2+3)")
+    trace = []
+    value, reason = run_safe(tree, trace=trace)
+    assert reason is None and value == -5
+    assert len(trace) == 1
+    assert isinstance(trace[0], BinOpStep)
+    assert trace[0].result == 5  # BinOp's own result (before USub)
+
+
+def test_trace_skips_constant_lookup():
+    # `pi + 1`: one BinOp, zero CallSteps. The `pi` lookup is not a step.
+    tree, _ = parse("pi + 1")
+    trace = []
+    run_safe(tree, trace=trace)
+    assert len(trace) == 1
+    assert trace[0].op == "+"
+
+
+def test_trace_operator_symbols_match_user_syntax():
+    from lib.walker import _OP_SYMBOLS
+    expected = {
+        "+": "+", "-": "-", "*": "*",
+        "/": "/", "//": "//", "**": "**",
+    }
+    seen = set(_OP_SYMBOLS.values())
+    for sym in expected.values():
+        assert sym in seen, f"operator {sym!r} missing from _OP_SYMBOLS"

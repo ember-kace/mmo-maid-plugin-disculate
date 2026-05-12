@@ -4,6 +4,25 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.2.4] — 2026-05-12
+
+Adds a "Steps" field to the `/calc` result card that shows the worked-out math — every intermediate computation, in order — for any expression with two or more operations. Zero behaviour change for trivial expressions: `/calc 2+2` still shows just the header-hero result with no extra clutter.
+
+### Added
+- `lib/walker.py:BinOpStep` and `CallStep` — frozen-shape dataclasses representing one binary-operation or function-call step in an evaluation trace. Each entry carries the already-evaluated operands, operator symbol (or function name + args), and the computed result.
+- `lib/walker.py:_OP_SYMBOLS` — map from `ast.Add` / `ast.Sub` / `ast.Mult` / `ast.Div` / `ast.FloorDiv` / `ast.Pow` to the user-syntax operator strings (`+`, `-`, `*`, `/`, `//`, `**`). Used when emitting BinOp trace entries so the displayed step matches the expression's notation.
+- `lib/walker.py:run` and `lib/walker.py:run_safe` accept an optional `trace=[...]` parameter. When non-None, the walker appends a `BinOpStep` or `CallStep` for every successful BinOp / function call in inner-first order. UnaryOp / Constant / Name lookups don't emit steps (no meaningful computation to show).
+- `lib/embed.py:format_steps` — renders a trace as a numbered string using `format_result` for value rendering, so the trace and the final answer use the same precision / scientific-threshold / thousands-separator settings. Capped at 30 lines with a `… (N more)` overflow line.
+- `lib/embed.py:build_result_embed` accepts an optional `steps_text=...` parameter. When provided, adds a full-width `Steps` field below the result hero.
+
+### Changed
+- `plugin.py:cmd_calc` allocates a trace list, passes it to `run_safe`, and (smart-auto) renders the Steps field only when `len(trace) >= 2`. For `2+2`, `sqrt(2)`, or `min(3, 1, 4)` the trace has fewer than 2 entries and the Steps field is suppressed automatically.
+
+### Notes
+- **Faithful-to-AST rendering**: percent preprocessing happens before the walker runs, so `50%` shows in the trace as `50 / 100 = 0.5`, not `50% = 0.5`. Constants like `pi` are inlined as their numeric value at the moment they're read (no symbolic `pi → 3.141593` step is emitted). Both behaviours are intentional and documented in `CLAUDE.md`.
+- The error path discards the trace — error embeds never carry a Steps field, even if some sub-steps completed before the failure.
+- Test count: 197 → 208.
+
 ## [0.2.3] — 2026-05-12
 
 Visual polish for `/calc` result and `/calc-help` embeds. Zero behavior change; same math, same SDK contract.

@@ -324,6 +324,65 @@ def test_calc_with_real_sdk_event_shape_evaluates_expression():
     assert any("627259696343941120" in k for k in cd_keys), cd_keys
 
 
+def test_calc_shows_steps_field_for_compound_expression():
+    """v0.2.4: Steps field appears when AST has >= 2 traceable nodes."""
+    ctx = FakeCtx()
+    plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", "(2+1)*7-8")]))
+    embed = _embed(_first_response(ctx))
+    fields = embed.get("fields", [])
+    steps_field = next((f for f in fields if f["name"] == "Steps"), None)
+    assert steps_field is not None, f"Steps field missing; fields={fields}"
+    assert steps_field["inline"] is False, "Steps field must be full-width"
+    value = steps_field["value"]
+    # Numbered list with three entries leading to the final 13.
+    assert "1." in value and "2." in value and "3." in value
+    assert "= `13`" in value
+
+
+def test_calc_shows_steps_field_for_nested_function_calls():
+    ctx = FakeCtx()
+    plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", "sqrt(abs(-16))")]))
+    embed = _embed(_first_response(ctx))
+    steps_field = next((f for f in embed.get("fields", []) if f["name"] == "Steps"), None)
+    assert steps_field is not None
+    value = steps_field["value"]
+    # Inner abs first, then outer sqrt.
+    assert "abs(-16)" in value
+    assert "sqrt(16)" in value
+
+
+def test_calc_omits_steps_field_for_trivial_expression():
+    ctx = FakeCtx()
+    plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", "2+2")]))
+    embed = _embed(_first_response(ctx))
+    fields = embed.get("fields", [])
+    assert not any(f["name"] == "Steps" for f in fields), \
+        "Steps field should be absent for a single-BinOp expression"
+
+
+def test_calc_omits_steps_field_for_single_function_call():
+    ctx = FakeCtx()
+    plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", "min(3, 1, 4, 1, 5)")]))
+    embed = _embed(_first_response(ctx))
+    fields = embed.get("fields", [])
+    assert not any(f["name"] == "Steps" for f in fields)
+
+
+def test_calc_steps_field_respects_precision_config():
+    """Step values share the same precision/scientific config as the final result."""
+    from lib import config as cfg
+    ctx = FakeCtx()
+    cfg.apply_updates(ctx, {"precision": 2})
+    # Bust the cooldown set by the apply_updates pathway? It's a config write,
+    # not a calc cooldown, so we're fine. But config doesn't set cooldown either.
+    plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", "1/3 + 1/6")]))
+    embed = _embed(_first_response(ctx))
+    steps_field = next((f for f in embed["fields"] if f["name"] == "Steps"), None)
+    assert steps_field is not None
+    # 6-decimal default rendering would emit "0.333333"; precision=2 must NOT.
+    assert "0.333333" not in steps_field["value"]
+
+
 def test_calc_works_when_ephemeral_raises():
     # T5-05: ephemeral subsystem failures must not block evaluation.
     # The plugin falls open (cooldown ineffective) but still answers.

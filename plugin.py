@@ -189,7 +189,8 @@ def cmd_calc(ctx: Context, event: Dict[str, Any]):
         return
 
     config = cfg.get_config(ctx)
-    value, eval_reason = run_safe(tree, angle_mode=config["angle_mode"])
+    trace: List[Any] = []
+    value, eval_reason = run_safe(tree, angle_mode=config["angle_mode"], trace=trace)
     if eval_reason is not None:
         _safe_respond(
             ctx,
@@ -217,6 +218,18 @@ def cmd_calc(ctx: Context, event: Dict[str, Any]):
         _record_metric(ctx, R.INTERNAL, started)
         return
 
+    # Smart auto: render the Steps field only when there are >= 2
+    # traceable nodes. For `2+2`, `sqrt(2)`, or `min(3,1,4)` the trace
+    # has < 2 entries and there's nothing meaningful to list, so the
+    # card stays clean.
+    steps_text = None
+    if len(trace) >= 2:
+        steps_text = eb.format_steps(
+            trace,
+            precision=config["precision"],
+            scientific_threshold=config["scientific_threshold"],
+        )
+
     _safe_respond(
         ctx,
         embeds=[eb.build_result_embed(
@@ -224,6 +237,7 @@ def cmd_calc(ctx: Context, event: Dict[str, Any]):
             result_text,
             config["angle_mode"],
             uses_trig=uses_trig(tree),
+            steps_text=steps_text,
         )],
         ephemeral=ephemeral,
     )

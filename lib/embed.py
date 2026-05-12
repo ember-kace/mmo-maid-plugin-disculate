@@ -12,12 +12,13 @@ echoed input.
 
 import re
 import unicodedata
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from . import reasons as R
+from .format import format_result
 from .functions import CATEGORY_ORDER, CONSTANTS, FUNCTIONS
 from .parser import MAX_INPUT_LEN
-from .walker import BUDGET_SECONDS
+from .walker import BUDGET_SECONDS, BinOpStep, CallStep, Step
 
 COLOR_OK = 0xC9A35A      # gold
 COLOR_ERROR = 0xCC4444   # red
@@ -29,6 +30,8 @@ EMBED_FIELD_NAME_MAX = 256
 EMBED_FIELD_VALUE_MAX = 1024
 EMBED_FOOTER_MAX = 2048
 EMBED_TOTAL_MAX = 5800  # 200-char margin under Discord's 6000
+
+MAX_STEPS_RENDERED = 30  # safety; real expressions cap well below this
 
 ALLOWED_MENTIONS_NONE: Dict[str, Any] = {"parse": []}
 
@@ -81,11 +84,44 @@ def enforce_total_cap(embed: Dict[str, Any], max_total: int = EMBED_TOTAL_MAX) -
     return embed
 
 
+def _format_step(step: Step, precision: int, scientific_threshold: int) -> str:
+    fmt = lambda v: format_result(v, precision, scientific_threshold)
+    if isinstance(step, BinOpStep):
+        return f"`{fmt(step.left)} {step.op} {fmt(step.right)}` = `{fmt(step.result)}`"
+    # CallStep
+    args = ", ".join(fmt(a) for a in step.args)
+    return f"`{step.name}({args})` = `{fmt(step.result)}`"
+
+
+def format_steps(
+    trace: List[Step],
+    precision: int,
+    scientific_threshold: int,
+) -> Optional[str]:
+    """Render a trace as a numbered string for the Steps embed field.
+
+    Returns None for an empty trace so callers can pass-through to
+    `build_result_embed(steps_text=None)`. Capped at MAX_STEPS_RENDERED;
+    if the trace is longer, a "… (N more)" line is appended.
+    """
+    if not trace:
+        return None
+    capped = trace[:MAX_STEPS_RENDERED]
+    lines = [
+        f"{i + 1}. {_format_step(s, precision, scientific_threshold)}"
+        for i, s in enumerate(capped)
+    ]
+    if len(trace) > MAX_STEPS_RENDERED:
+        lines.append(f"… ({len(trace) - MAX_STEPS_RENDERED} more)")
+    return "\n".join(lines)
+
+
 def build_result_embed(
     expression: str,
     result_text: str,
     angle_mode: str,
     uses_trig: bool = False,
+    steps_text: Optional[str] = None,
 ) -> Dict[str, Any]:
     expr = clip(safe_text(expression), 200)
     res = clip(safe_text(result_text), 200)
@@ -99,6 +135,14 @@ def build_result_embed(
         "description": clip(desc, EMBED_DESC_MAX),
         "color": COLOR_OK,
     }
+    # Optional Steps field — populated by the handler when the
+    # expression had >= 2 traceable nodes (smart-auto threshold).
+    if steps_text:
+        embed["fields"] = [{
+            "name": "Steps",
+            "value": clip(steps_text, EMBED_FIELD_VALUE_MAX),
+            "inline": False,
+        }]
     # Angle mode footer only when the expression actually used a trig
     # function — keeps non-trig results clean.
     if uses_trig:

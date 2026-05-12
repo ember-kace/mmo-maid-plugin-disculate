@@ -215,6 +215,14 @@ def test_pow_bit_budget_boundary_holds():
     assert reason == R.OVERFLOW
 
 
+def test_calc_log_base_one_reports_domain_not_div_by_zero():
+    """V1-03 end-to-end: `log(5, 1)` reaches the user as DOMAIN_ERROR,
+    not as the previously-misleading DIV_BY_ZERO."""
+    value, reason = _run("log(5, 1)")
+    assert value is None
+    assert reason == R.DOMAIN_ERROR
+
+
 def test_pow_dos_canaries_still_overflow():
     """Regression for T-round / R3 DoS guards: huge powers still
     produce OVERFLOW, not silently consume memory."""

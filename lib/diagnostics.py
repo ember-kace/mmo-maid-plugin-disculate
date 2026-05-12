@@ -162,8 +162,8 @@ _DOMAIN_GUIDANCE = {
         "Try `sqrt(abs(x))` if you want the magnitude, or use a non-negative argument.",
     ),
     "log": (
-        "`log` is undefined for zero or negative arguments.",
-        "Use a positive argument; `log(0)` approaches negative infinity.",
+        "`log` is undefined when the base is 1 or the argument is ≤ 0.",
+        "Use a positive argument and a base > 0 and ≠ 1. `log(0)` approaches negative infinity.",
     ),
     "ln": (
         "`ln` is undefined for zero or negative arguments.",

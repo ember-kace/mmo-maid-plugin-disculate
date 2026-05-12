@@ -142,7 +142,17 @@ def _i_exp(args, _am):
 def _i_log(args, _am):
     if len(args) == 1:
         return math.log(args[0])
-    return math.log(args[0], args[1])
+    base = args[1]
+    # math.log(x, base) computes log(x) / log(base). When base == 1,
+    # log(base) == 0 and Python raises ZeroDivisionError — which the
+    # walker would surface as `DIV_BY_ZERO`, but the real cause is a
+    # domain violation on the base. Pre-empt with ValueError so the
+    # walker maps it to DOMAIN_ERROR with the right hint (V1-03).
+    if base == 1:
+        raise ValueError("log: base must not be 1")
+    if base <= 0:
+        raise ValueError("log: base must be positive and not 1")
+    return math.log(args[0], base)
 
 
 def _i_log10(args, _am):

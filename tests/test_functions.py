@@ -61,6 +61,29 @@ def test_mod_zero_raises():
         call_function("mod", [1, 0], "rad")
 
 
+# --- V1-03 / V4-02: log base validation -----------------------------
+
+
+def test_log_base_one_raises_value_error():
+    """log base 1 must produce a ValueError (which the walker maps to
+    DOMAIN_ERROR), not a ZeroDivisionError (which would map to
+    DIV_BY_ZERO with a misleading hint about the second arg)."""
+    with pytest.raises(ValueError):
+        call_function("log", [5, 1], "rad")
+
+
+@pytest.mark.parametrize("base", [0, -2, -0.5])
+def test_log_base_non_positive_raises_value_error(base):
+    with pytest.raises(ValueError):
+        call_function("log", [5, base], "rad")
+
+
+def test_log_with_valid_base_works():
+    # Regression: don't break the happy path.
+    assert call_function("log", [8, 2], "rad") == pytest.approx(3.0)
+    assert call_function("log", [100, 10], "rad") == pytest.approx(2.0)
+
+
 @pytest.mark.parametrize("a, b, expected", [
     (-7, 3, 2),         # int / int
     (-7.0, 3, 2.0),     # mixed

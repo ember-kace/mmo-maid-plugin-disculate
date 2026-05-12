@@ -58,21 +58,23 @@ def _check_arity(name: str, args: List[Any], expected) -> None:
 
 # --- Pow guard (used by evaluator, not via FUNCTIONS) -----------------
 
-_POW_INT_EXP_LIMIT = 64
-_POW_INT_BASE_LIMIT = 1_000_000
+# Bit-budget for int**int results. Lets small-base bignums stay exact
+# (e.g. 2**100 is only 101 bits = 13 bytes), while still bounding any
+# single pow() at ~512 bytes of bignum — well under the 64 MB sandbox.
+# Pre-v0.2.9 we used two axis caps (exp > 64 OR base > 1_000_000); that
+# collapsed 2**100 to a float, breaking `mod(2**100, 7)` and similar.
+_POW_RESULT_BIT_BUDGET = 4096
 
 
 def _safe_pow(base, exp):
-    # When base and exp are both small non-negative ints, native int**int
-    # is exact and cheap. Beyond the limits below, the result could grow
-    # large enough to OOM the 64 MB sandbox (e.g. 1_000_000**64 is a
-    # ~400-byte bignum, but 10**1_000_000 is ~120 KB and grows from
-    # there). Route those through math.pow so the result clamps at
-    # float overflow and we get a typed OverflowError instead.
     if isinstance(base, int) and isinstance(exp, int) and exp >= 0:
-        if exp > _POW_INT_EXP_LIMIT or abs(base) > _POW_INT_BASE_LIMIT:
-            return math.pow(base, exp)
-        return base ** exp
+        # bit_length(0) == 0, so 0**N would falsely fit in 0 bits; the
+        # max(1, ...) keeps the multiplication honest. `0**N` is also
+        # trivially safe (0 or 1), so this is defense-in-depth only.
+        bits = exp * max(1, abs(base).bit_length())
+        if bits <= _POW_RESULT_BIT_BUDGET:
+            return base ** exp
+        return math.pow(base, exp)
     return math.pow(base, exp)
 
 

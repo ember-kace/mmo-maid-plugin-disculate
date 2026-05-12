@@ -170,10 +170,58 @@ def test_pow_small_ints_preserved():
 
 
 def test_pow_huge_base_routes_through_float():
+    # Result of 10000000**2 is 47 bits (well under the 4096 budget),
+    # so v0.2.9 returns an exact int. Pre-0.2.9 this routed through
+    # math.pow because base > 1_000_000 — now the bit-budget keeps it
+    # exact. Either return type is fine; the math is what matters.
     value, reason = _run("10000000**2")
-    # base > 1_000_000 forces float route
     assert reason is None
-    assert value == pytest.approx(1e14)
+    assert value == 100_000_000_000_000
+
+
+# --- V1-01 pow bit-budget tests (v0.2.9) ----------------------------
+
+
+@pytest.mark.parametrize("expr, expected", [
+    ("mod(2**100, 7)", 2),
+    ("mod(3**70, 7)", 4),
+    ("mod(2**70, 7)", 2),
+    ("2**100 - 2**100", 0),
+])
+def test_pow_preserves_int_exactness_for_small_base_bignums(expr, expected):
+    """V1-01: small-base, high-exp powers stay exact. Pre-v0.2.9
+    `mod(2**100, 7)` returned 0.0 because _safe_pow routed through
+    math.pow whenever exp > 64."""
+    value, reason = _run(expr)
+    assert reason is None, expr
+    assert value == expected, f"{expr} -> {value}, expected {expected}"
+
+
+def test_pow_bit_budget_boundary_holds():
+    """The bit estimate is conservative: `exp * bit_length(|base|)`
+    overestimates the actual result bit-length by roughly 2x for
+    base=2 (since `bit_length(2) == 2` but `log2(2) == 1`). With a
+    4096-bit budget, the boundary for base=2 lands at exp=2048 →
+    estimate 4096 (fits) vs exp=2049 → estimate 4098 (routed to
+    math.pow, which overflows past float max ~10**308)."""
+    # 2**2048: estimate 2048 * 2 = 4096 bits = budget. Exact int.
+    value, reason = _run("2**2048")
+    assert reason is None
+    assert isinstance(value, int)
+    assert value.bit_length() == 2049  # actual is N+1 bits for 2**N
+    # 2**2049: estimate 4098 > 4096 budget. math.pow overflows.
+    value, reason = _run("2**2049")
+    assert value is None
+    assert reason == R.OVERFLOW
+
+
+def test_pow_dos_canaries_still_overflow():
+    """Regression for T-round / R3 DoS guards: huge powers still
+    produce OVERFLOW, not silently consume memory."""
+    for expr in ("9**99999", "10**1000000"):
+        value, reason = _run(expr)
+        assert value is None, expr
+        assert reason == R.OVERFLOW, f"{expr} -> {reason}"
 
 
 def test_timeout_trips_when_budget_tiny():

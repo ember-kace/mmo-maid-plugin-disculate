@@ -4,6 +4,25 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.2.7] — 2026-05-12
+
+Display fix: the `**` operator (Pow) is now visible in the expression echo on `/calc` result and error cards. Prior versions silently stripped `**` (along with `__`, `~~`, `||`) as a defensive markdown scrub, which made the displayed expression lie about what the user typed — e.g. `/calc 2**8` rendered as `` `2  8` `` (two-space gap, no operator). This produced confusing back-to-back screenshots where identical-looking inputs gave different results.
+
+### Root cause
+`lib/embed.py:safe_text` strips every common markdown marker. It's called for the expression echo, which is then wrapped in single backticks (Discord inline code). But Discord doesn't interpret `**` / `__` / `~~` / `||` inside inline code anyway — only backticks themselves break out of the context. So stripping the rest is paranoia that costs display fidelity.
+
+### Changed
+- `lib/embed.py:safe_text_in_code` (new). Same as `safe_text` minus the markdown-marker strip; still removes single + triple backticks (the only chars that genuinely escape the inline-code context).
+- `build_result_embed` and `build_error_embed` now use `safe_text_in_code` for the expression echo. The big `## = result` heading still uses strict `safe_text` because `**` inside a markdown header WOULD render as bold.
+
+### Added
+- `tests/test_handlers.py:test_calc_expression_echo_preserves_pow_operator` — locks `` `2**8` `` survival into the result-embed description.
+- `tests/test_handlers.py:test_calc_expression_echo_preserves_pow_in_error_path` — same lock for the error builder.
+
+### Notes
+- No change to parsing or evaluation. `**` was always parsed correctly; only the display lied.
+- All existing adversarial protections (`@everyone` neutralization, bidi rejection, URL/markdown-link stripping, backtick break-out prevention) remain intact in both `safe_text` variants.
+
 ## [0.2.6] — 2026-05-12
 
 User-visible UX fix surfaced by a real `/calc` in production: `1000 * (1 + 7%)  10` (missing operator between `)` and `10`) returned a generic `parse_error` with no helpful pointer. The v0.2.0 implicit-multiplication detection caught `2(3)` and `2pi` but didn't catch the symmetric `)<digit>` / `)<letter>` cases.

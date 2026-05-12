@@ -392,6 +392,30 @@ def test_calc_steps_field_respects_precision_config():
     assert "0.333333" not in steps_field["value"]
 
 
+def test_calc_expression_echo_preserves_pow_operator():
+    """v0.2.7: `**` is a valid math operator and must survive into the
+    expression echo. Pre-v0.2.7, safe_text stripped it defensively,
+    making the displayed expression lie about what the user typed
+    (e.g., `2**8` rendered as `2  8` with double space)."""
+    ctx = FakeCtx()
+    plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", "2**8")]))
+    embed = _embed(_first_response(ctx))
+    desc = embed["description"]
+    assert "`2**8`" in desc, f"** should survive into the expression echo; got: {desc!r}"
+    assert "= 256" in desc
+
+
+def test_calc_expression_echo_preserves_pow_in_error_path():
+    """Same scrub fix applies to the error embed echo."""
+    ctx = FakeCtx()
+    # Force a parse error after `**` so we exercise the error builder.
+    # `2**` has a trailing operator -> parse_error.
+    plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", "2**")]))
+    embed = _embed(_first_response(ctx))
+    desc = embed["description"]
+    assert "`2**`" in desc, f"** should survive into the error echo; got: {desc!r}"
+
+
 def test_calc_result_embed_carries_brand_thumbnail():
     """v0.2.5: success embeds carry the Disculate avatar in the top-right."""
     from lib.embed import BRAND_THUMBNAIL_URL

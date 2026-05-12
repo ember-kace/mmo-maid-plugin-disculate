@@ -64,6 +64,33 @@ def safe_text(s: str) -> str:
     return s
 
 
+def safe_text_in_code(s: str) -> str:
+    """Like safe_text but for strings destined to live inside Discord
+    inline-code spans (single backticks).
+
+    Inside backticks, the only markdown Discord still interprets is the
+    backtick itself (it closes the span). So `**`, `__`, `~~`, `||` are
+    safe to display literally — and we *want* `**` to display literally
+    because it's a valid Python operator (Pow), which users type often
+    in math expressions (`2**8`, `1.07 ** 10`).
+
+    Still strips: bidi controls, markdown links, bare URLs, @-mention
+    patterns, single + triple backticks (which would break out of the
+    inline-code context and let downstream chars become real markdown).
+    """
+    if not s:
+        return ""
+    s = unicodedata.normalize("NFKC", s)
+    s = _BIDI_CONTROL.sub("", s)
+    s = _MARKDOWN_LINK.sub(r"\1", s)
+    s = _BARE_URL.sub("[link]", s)
+    s = s.replace("@everyone", "@​everyone").replace("@here", "@​here")
+    # Only backticks would actually escape the inline-code context.
+    s = s.replace("```", "")
+    s = s.replace("`", "")
+    return s
+
+
 def clip(s: str, n: int) -> str:
     if s is None:
         return ""
@@ -133,7 +160,12 @@ def build_result_embed(
     uses_trig: bool = False,
     steps_text: Optional[str] = None,
 ) -> Dict[str, Any]:
-    expr = clip(safe_text(expression), 200)
+    # Expression goes inside backticks (inline code) — use the
+    # inline-code-aware scrubber so legitimate Python operators
+    # like `**` survive into the display. Result goes inside a `##`
+    # markdown header where `**` would render as bold, so it uses
+    # the strict safe_text.
+    expr = clip(safe_text_in_code(expression), 200)
     res = clip(safe_text(result_text), 200)
     # Header-hero layout: small monospace expression on top, large
     # `##`-header result below. Discord renders `##` inside embed
@@ -167,7 +199,9 @@ def build_error_embed(expression: str, reason: str) -> Dict[str, Any]:
     # the old "Calc error" title was redundant. Hint becomes the primary
     # content; the backticked input speaks for itself (no "Input:" label).
     hint = R.hint_for(reason)
-    expr = clip(safe_text(expression), 200) if expression else ""
+    # Expression renders inside backticks; use the inline-code-aware
+    # scrubber so `**` etc. show literally (matches v0.2.7 result embed).
+    expr = clip(safe_text_in_code(expression), 200) if expression else ""
     desc_parts: List[str] = [hint]
     if expr:
         desc_parts.append(f"\n`{expr}`")

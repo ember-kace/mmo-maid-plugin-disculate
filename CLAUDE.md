@@ -78,7 +78,7 @@ See `SDK-ASSUMPTIONS.md` for the full list. Two notable ones:
 - **`assets/disculate.webp` is NOT in `tools/build_bundle.py:INCLUDED_FILES`** (v0.2.5). The brand image is referenced by URL — Discord fetches it from GitHub at render time. Adding it to the bundle would inflate the upload zip for no benefit. The asset must be committed and pushed to `main` for the URL to resolve.
 - **Version is 0.2.0, not 1.0.0.** The handoff's semver policy reserves major bumps for breaking changes; the inaugural release ships as 0.1.0 and v1.0.0 comes after the post-deploy SDK-assumption probe (S3).
 
-## User preferences (Paul)
+## Project conventions
 
 - Plan-first → Implement → Audit. Already done for v1; for changes, re-plan before coding.
 - Terse with file:line citations. `lib/parser.py:60` beats "in the parser around line 60."

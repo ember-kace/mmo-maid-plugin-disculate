@@ -36,6 +36,12 @@ env/
 .DS_Store
 Thumbs.db
 desktop.ini
+._*
+
+# Logs and one-off scratch files
+*.log
+*.bak
+*.tmp
 
 # Local-only notes (anything that would otherwise tempt you to commit secrets)
 *.local.md

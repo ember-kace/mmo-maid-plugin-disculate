@@ -1,6 +1,6 @@
 # AUDIT-REPORT.md — Disculate
 
-**Verdict:** PASS for v0.2.8 ship (post-diagnostic-explainer release).
+**Verdict:** PASS for v0.2.9 ship (post-Round-V second-order audit).
 
 | Round | Verdict | Findings | Action |
 |---|---|---|---|
@@ -9,9 +9,10 @@
 | R3 — Deep (v0.1.0) | PASS | 0 BLOCKER, 0 MAJOR, 5 INFO | Logged into SDK-ASSUMPTIONS.md and RUNBOOK.md. |
 | T — Tailored, math-shape-specific (v0.2.0) | PASS | 0 BLOCKER, 3 MAJOR (fixed), 6 MINOR (mostly fixed), 4 NIT (mostly fixed), 3 ENHANCE (deferred) | All MAJORs and most MINORs fixed; ENHANCE items in backlog. |
 | U — Marketplace-validator escape (v0.2.1) | PASS | 1 BLOCKER (fixed) + new audit gate | File + identifier rename + substring-based local gate to mirror the marketplace's scanner. |
-| **Post-launch UX hardening (v0.2.2 – v0.2.8)** | **PASS** | **3 production-found bugs (fixed), 4 UX improvements shipped** | See "Post-launch findings" section below. |
+| Post-launch UX hardening (v0.2.2 – v0.2.8) | PASS | 3 production-found bugs (fixed), 4 UX improvements shipped | See "Post-launch findings" section below. |
+| **V — Second-order audit (v0.2.9)** | **PASS** | **2 MAJOR (fixed), 1 MINOR, 1 docs-only, 7 NIT cleanups, 5 test-coverage gaps closed** | See "Round V" section at the bottom. |
 
-Audit gates: all 8 green (`py tools/run_audit.py`). Tests: 247/247 green (was 195 at v0.2.0; the +52 covers diagnostics, step trace, brand thumbnail, header-hero layout, and SDK shape regression locks).
+Audit gates: all 8 green (`py tools/run_audit.py`). Tests: 272/272 green (was 195 at v0.2.0; the +77 covers diagnostics, step trace, brand thumbnail, header-hero layout, SDK shape regression locks, and Round V coverage gaps).
 
 ---
 
@@ -307,3 +308,49 @@ Each motivated by direct user feedback rather than an audit finding:
 - **v0.2.8** — Diagnostic explainer with did-you-mean. See ARCHITECTURE §L.
 
 ### Status: All 247 tests green, all 8 audit gates green, no known regressions in production.
+
+---
+
+## Round V — Second-order audit (v0.2.9)
+
+Independent re-read of the entire codebase after R1–R3, T, U, and v0.2.2–v0.2.8 post-launch shipped. Goal: find what those rounds missed. Result: 2 MAJOR correctness items + 1 MINOR error-routing + 1 minor cap robustness + 7 nit-level cleanups + 5 test-coverage gaps. No BLOCKER. All fixed in v0.2.9.
+
+| ID | Severity | One-liner | Status |
+|---|---|---|---|
+| V1-01 | MAJOR | `_safe_pow` precision loss: `mod(2**100, 7) = 0.0` instead of `2` | **Fixed** (bit-budget replaces axis caps) |
+| V1-02 | MAJOR | `_options` raises AttributeError on non-dict `event["data"]` | **Fixed** (type-check each slot) |
+| V1-03 | MINOR | `log(x, 1)` reports DIV_BY_ZERO with misleading "second arg" hint | **Fixed** (pre-check, ValueError → DOMAIN_ERROR) |
+| V2-01 | MINOR | `enforce_total_cap` trims description only — field-heavy embeds escape cap | **Fixed** (two-pass: description, then fields) |
+| V2-02 | NIT (docs) | Floor-division semantics may surprise C/JS users | **Fixed** (Notes line in `/calc-help`, CLAUDE bullet) |
+| V3-01 | NIT | `format_result`'s `isinstance(value, bool)` branch is unreachable | **Fixed** (branch removed, invariant locked by V4-04) |
+| V3-02 | NIT | `cmd_calc_config` tautology `x if x is not None else None` | **Fixed** (three tautologies dropped) |
+| V3-03 | NIT | Lazy `from . import diagnostics` in `build_error_embed` — no cycle | **Fixed** (hoisted to module top) |
+| V3-04 | NIT | Redundant `and abs_v < big` in `_format_float` | **Fixed** (condition simplified) |
+| V3-05 | NIT | `embed.py` docstring drift (`_safe_text` → `safe_text`) | **Fixed** (docstring corrected) |
+| V3-06 | NIT | Inconsistent import style in `tools/run_audit.py` | **Fixed** (`from tools.build_bundle import …` everywhere) |
+| V3-07 | NIT | Literal ZWSP / bidi controls in `embed.py` source | **Fixed** (replaced with `\u` escapes) |
+| V3-08 | NIT | `.claude/settings.local.json` allegedly committed | **N/A** (file isn't tracked; `.gitignore` already covers it) |
+| V3-09 | NIT | "epoch 0" comment in `build_bundle.py` misleading | **Fixed** (rephrased as "zip-format epoch, 1980-01-01") |
+| V4-01 | TEST | No regression test for `_safe_pow` exact-int preservation | **Added** (4 cases + boundary + DoS canary) |
+| V4-02 | TEST | No test for `log(x, 1)` domain handling | **Added** (3 cases + happy-path lock) |
+| V4-03 | TEST | No test for malformed `event["data"]` shape | **Added** (7 parametrized malformed payloads) |
+| V4-04 | TEST | No invariant test that walker never returns `bool` | **Added** (14 sampled expressions) |
+| V4-05 | TEST | No test for `enforce_total_cap` field-heavy path | **Added** (new `tests/test_embed.py`, 5 cases) |
+
+### Why R1–T missed these
+
+V1-01 is the most instructive: existing tests probed the *DoS* boundary (does `9**99999` overflow?) and the *domain* boundary (does `sqrt(-1)` raise?). No test asserted *exact* int preservation for a power the bignum was perfectly capable of computing. The documented pow-guard contract in CLAUDE.md said "clamps at float-overflow," not "may lose precision below the DoS threshold" — so the precision regression was invisible to anyone reading the contract.
+
+V1-02 came from the same blind spot as v0.2.2's "SDK doc examples are advisory, not authoritative": the post-v0.2.2 fix made `_options` more defensive but the `event["data"]` fallback path was added later (defensive against a Discord-style nested shape) and inherited the original assumption that `data` is a dict if present at all.
+
+V1-03 — never noticed because `log` happy-path tests cover `log(8, 2) == 3` etc.; nobody ever tested `log(5, 1)` until a user could ask "why does this work the way it does?"
+
+V2-01 — never noticed because every embed Disculate currently builds fits well under the cap. Found by reading the function critically, asking "does this enforce the cap in every shape?" rather than "does this work for our shapes?"
+
+### Architectural observations (informational, not findings)
+
+- The pow guard was implicitly enforcing two policies (DoS bound + precision floor). After V1-01's fix, it enforces one (DoS bound); precision preservation is a direct consequence.
+- The detail-string convention has free-form string detail with handler-specific parsing (`split(":", 1)`, `rpartition("@")`). Works for the current ~12 reasons but a `Detail = dataclass` refactor would scale better if the explainer grows. Defer until pain emerges.
+- Adding `tests/test_known_inputs.py` (a single parametrized catalogue of expression → expected reason / value) would make future regressions louder than the current spread across `test_adversarial`, `test_parser`, `test_walker`, etc. Worth doing in a future round; not a finding.
+
+### Status: 272 tests green, all 8 audit gates green. Pow-guard precision restored; handler is type-safe; help embed protected end-to-end against the 6000-char wall.

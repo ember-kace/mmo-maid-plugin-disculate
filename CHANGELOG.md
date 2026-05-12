@@ -4,6 +4,45 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.2.9] — 2026-05-12
+
+Round V second-order audit fixes. Two MAJOR correctness items, one MINOR, plus a sweep of seven nit-level cleanups. Zero metric-shape change, zero reason-code change; the bounded enum used for `calc_eval` tag values is identical to v0.2.8.
+
+### Fixed
+- **V1-01 (MAJOR): `mod(2**100, 7)` now returns `2` instead of `0.0`.** Pre-v0.2.9 the pow guard routed any `int**int` through `math.pow` whenever `exp > 64`, collapsing small-base bignums to floats. Replaced the two axis caps (`_POW_INT_EXP_LIMIT`, `_POW_INT_BASE_LIMIT`) with a single bit-budget (`_POW_RESULT_BIT_BUDGET = 4096`); estimate result size as `exp * bit_length(|base|)` and only route through `math.pow` when that exceeds the budget. DoS canaries (`9**99999`, `10**1000000`) still produce `OVERFLOW`.
+- **V1-02 (MAJOR): malformed `event["data"]` no longer escapes the handler as `AttributeError`.** `_options` pre-v0.2.9 did `(event.get("data") or {}).get("options")` — when `event["data"]` was truthy non-dict (string, list, int), the `.get` raised AttributeError. Now every option slot is `isinstance(list)`-checked; malformed shapes fail closed (empty dict, no exception).
+- **V1-03 (MINOR): `log(x, 1)` now reports `DOMAIN_ERROR` with a base-aware hint** instead of the misleading `DIV_BY_ZERO` ("make sure the second argument isn't zero"). `_i_log` pre-checks `base == 1` and `base <= 0` and raises `ValueError`, which the walker maps to `DOMAIN_ERROR` via the existing path. `_DOMAIN_GUIDANCE["log"]` updated to mention the base constraint.
+- **V2-01 (MINOR): `enforce_total_cap` now trims fields when description trim alone isn't enough.** Pre-v0.2.9 only the description was trimmed; field-dominated embeds could escape the 5800-char internal cap (and hit Discord's hard 6000 limit). Added a second pass that walks fields from the end, halving each value or dropping the field if it can't shrink further.
+
+### Changed
+- **V2-02 (docs): `/calc-help` Notes field now mentions** that `//` is Python floor-division (rounds toward negative infinity: `-7 // 2 = -4`), not C-style truncation toward zero. CLAUDE.md "things that look wrong but aren't" gets a matching bullet.
+- **V3 sweep (cleanups):**
+  - `format_result` drops its unreachable `isinstance(value, bool)` branch (V3-01).
+  - `cmd_calc_config` drops three `x if x is not None else None` tautologies (V3-02).
+  - `from . import diagnostics` hoisted to module top in `embed.py` — no cycle existed (V3-03).
+  - Redundant `and abs_v < big` removed from `_format_float`'s integer-display branch (V3-04).
+  - `embed.py` module docstring references `safe_text` / `clip` correctly (no leading underscores) (V3-05).
+  - `tools/run_audit.py` standardises on `from tools.build_bundle import …` for both call sites; drops the redundant `tools/` `sys.path.insert` (V3-06).
+  - `embed.py` literal U+200B (ZWSP) and U+202A-E / U+2066-9 (bidi controls) replaced with `\u`-escape source forms so editors don't render them as invisible characters (V3-07).
+  - `build_bundle.py` docstring "epoch 0" rephrased as "the zip-format epoch, 1980-01-01" (V3-09).
+
+### Added
+- 12 new tests across `test_walker.py`, `test_functions.py`, `test_handlers.py`, and new `tests/test_embed.py`:
+  - V4-01: pow exact-int preservation across the bit-budget boundary (4 cases) + DoS regression.
+  - V4-02: log base 1 / 0 / negative each produce `DOMAIN_ERROR` (3 cases).
+  - V4-03: 7 malformed event-payload shapes survive the handler without exception.
+  - V4-04: walker never returns `bool` for any of 14 sampled expressions.
+  - V4-05: `enforce_total_cap` trims field-heavy embeds; help embed always under cap (5 cases).
+- New file `tests/test_embed.py` for embed-internal edge cases that don't need to go through the handler.
+
+### Skipped
+- **V3-08** (`.claude/settings.local.json` removal): the audit reported the file as committed despite `.gitignore` covering `.claude/`. `git ls-files | grep claude` returns only `CLAUDE.md` — the settings file exists on disk but isn't tracked. No action needed.
+
+### Notes
+- Test count: 247 → 272.
+- Pow-guard contract is now documented in CLAUDE.md as bit-budget rather than per-axis caps.
+- `_safe_pow`'s estimate is conservative (overestimates by ~2x for `base == 2` since `bit_length(2) == 2` while `log2(2) == 1`); the boundary for `2**N` lands at `N == 2048`. Still well under sandbox limits.
+
 ## [0.2.8] — 2026-05-12
 
 Error embeds now diagnose the *specific* problem in the user's input and suggest a concrete fix, instead of showing the same generic hint per reason code. The metric-shape stays unchanged (bounded enum `result` tag); diagnostics are descriptive text only.

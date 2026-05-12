@@ -351,6 +351,8 @@ def _build_help_payload() -> Dict[str, Any]:
     notes = (
         "Trig honours `/calc-config angle_mode` (radians by default). "
         "Modulo via `mod(a, b)`. `^` is not power — use `**`. "
+        "Floor-division `//` rounds toward negative infinity "
+        "(Python semantics): `-7 // 2` = `-4`, not `-3`. "
         "Bitwise ops, factorial, variables, `inf`/`nan` literals, and "
         "comparisons are not supported."
     )

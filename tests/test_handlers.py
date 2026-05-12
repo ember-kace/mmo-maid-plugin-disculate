@@ -416,13 +416,14 @@ def test_calc_expression_echo_preserves_pow_in_error_path():
     assert "`2**`" in desc, f"** should survive into the error echo; got: {desc!r}"
 
 
-def test_calc_result_embed_carries_brand_thumbnail():
-    """v0.2.5: success embeds carry the Disculate avatar in the top-right."""
-    from lib.embed import BRAND_THUMBNAIL_URL
+def test_calc_result_embed_has_no_brand_thumbnail():
+    """v0.2.10: result embeds dropped the thumbnail — the `## = N` hero
+    is the dominant visual; thumbnail competed without adding identity
+    beyond the gold accent. Only /calc-help carries the avatar now."""
     ctx = FakeCtx()
     plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", "2+2")]))
     embed = _embed(_first_response(ctx))
-    assert embed.get("thumbnail", {}).get("url") == BRAND_THUMBNAIL_URL
+    assert "thumbnail" not in embed
 
 
 def test_help_embed_carries_brand_thumbnail():
@@ -433,15 +434,26 @@ def test_help_embed_carries_brand_thumbnail():
     assert embed.get("thumbnail", {}).get("url") == BRAND_THUMBNAIL_URL
 
 
-def test_config_updated_embed_carries_brand_thumbnail():
-    from lib.embed import BRAND_THUMBNAIL_URL
+def test_help_embed_title_links_to_marketplace():
+    """v0.2.10: /calc-help title is a hyperlink to the marketplace listing."""
+    from lib.embed import MARKETPLACE_URL
+    ctx = FakeCtx()
+    plugin_module.cmd_calc_help(ctx, slash_event("calc-help"))
+    embed = _embed(_first_response(ctx))
+    assert embed.get("url") == MARKETPLACE_URL
+    assert MARKETPLACE_URL.startswith("https://")
+
+
+def test_config_updated_embed_has_no_brand_thumbnail():
+    """v0.2.10: config-updated dropped the thumbnail along with the
+    result embed. Only /calc-help carries the avatar."""
     ctx = FakeCtx()
     plugin_module.cmd_calc_config(
         ctx,
         slash_event("calc-config", options=[opt("precision", 3)], permissions=0x20),
     )
     embed = _embed(_first_response(ctx))
-    assert embed.get("thumbnail", {}).get("url") == BRAND_THUMBNAIL_URL
+    assert "thumbnail" not in embed
 
 
 def test_error_embed_has_no_brand_thumbnail():

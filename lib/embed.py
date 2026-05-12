@@ -25,14 +25,24 @@ COLOR_OK = 0xC9A35A      # gold
 COLOR_ERROR = 0xCC4444   # red
 COLOR_INFO = 0x7A8AA0    # muted slate
 
-# Brand thumbnail rendered top-right of success embeds. Hosted in this
-# repo (assets/disculate.webp) so the URL never moves out from under us.
-# Rebranding = replace the file in place; Discord re-fetches within
-# minutes. Do NOT change this URL — Discord's image proxy caches it.
+# Brand thumbnail rendered top-right of the /calc-help embed only.
+# Hosted in this repo (assets/disculate.webp) so the URL never moves
+# out from under us. Rebranding = replace the file in place; Discord
+# re-fetches within minutes. Do NOT change this URL — Discord's image
+# proxy caches it.
+#
+# Pre-v0.2.10 the thumbnail also appeared on /calc result and
+# /calc-config (updated) success embeds. Removed there per user
+# request: the result hero (## = N) was the dominant visual already;
+# the thumbnail competed with it without adding identity beyond what
+# the embed's gold accent already signalled. Help is the one card
+# where users need an identity cue + a place to send them next, so
+# it keeps the thumbnail and gains the clickable marketplace URL.
 BRAND_THUMBNAIL_URL = (
     "https://raw.githubusercontent.com/ember-kace/"
     "mmo-maid-plugin-disculate/main/assets/disculate.webp"
 )
+MARKETPLACE_URL = "https://mmomaid.cloud/marketplace/disculate"
 _BRAND_THUMBNAIL: Dict[str, str] = {"url": BRAND_THUMBNAIL_URL}
 
 EMBED_TITLE_MAX = 256
@@ -215,7 +225,6 @@ def build_result_embed(
     embed: Dict[str, Any] = {
         "description": clip(desc, EMBED_DESC_MAX),
         "color": COLOR_OK,
-        "thumbnail": _BRAND_THUMBNAIL,
     }
     # Optional Steps field — populated by the handler when the
     # expression had >= 2 traceable nodes (smart-auto threshold).
@@ -296,11 +305,8 @@ def build_config_embed(config: Dict[str, Any], changed: List[str]) -> Dict[str, 
         "color": COLOR_OK if changed else COLOR_INFO,
         "fields": fields,
     }
-    # Thumbnail only on the "Settings updated" path (admin actually
-    # changed a value). The read-only "Current settings" view uses
-    # INFO color and stays plain alongside cooldown / errors.
-    if changed:
-        embed["thumbnail"] = _BRAND_THUMBNAIL
+    # v0.2.10: config embeds no longer carry the brand thumbnail.
+    # /calc-help is the only embed with the avatar now.
     return enforce_total_cap(embed)
 
 
@@ -379,6 +385,11 @@ def build_help_embed() -> Dict[str, Any]:
     payload = _build_help_payload()
     embed = {
         "title": "Disculate — quick reference",
+        # Making the title clickable links it to the marketplace listing
+        # (Discord renders embed title as a hyperlink when `url` is set).
+        # v0.2.10 — single discoverable jump from the help card to the
+        # plugin's marketplace page.
+        "url": MARKETPLACE_URL,
         "description": clip(payload["description"], EMBED_DESC_MAX),
         "color": COLOR_INFO,
         "thumbnail": _BRAND_THUMBNAIL,

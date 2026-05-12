@@ -4,6 +4,24 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.2.10] — 2026-05-12
+
+Brand thumbnail trimmed back to `/calc-help` only; help title is now a clickable link to the marketplace listing.
+
+### Changed
+- **`build_result_embed` and `build_config_embed` no longer emit the brand thumbnail.** Pre-v0.2.10 it appeared on result + config-updated cards alongside the gold accent and (for results) the `## = N` hero. The hero was the dominant visual; the thumbnail competed with it without adding identity beyond what the gold color already signalled. Removing it tightens the card.
+- **`build_help_embed` keeps the thumbnail and gains a clickable title.** The `url` field on the embed makes the "Disculate — quick reference" header a hyperlink to `https://mmomaid.cloud/marketplace/disculate`. Help is the natural place to surface "where do I find this plugin?" — users discovering Disculate via someone else's `/calc-help` invocation now have one click to the listing.
+
+### Added
+- `lib/embed.py:MARKETPLACE_URL` constant — single source of truth.
+- `tests/test_handlers.py:test_help_embed_title_links_to_marketplace` — locks the `url` field against future drift.
+- Negative tests for result and config-updated embed thumbnails (renamed from the v0.2.5 positive assertions).
+
+### Notes
+- SDK assumption A11 (embed `thumbnail` forwarding) was verified in v0.2.5 production for both result and help embeds. Removing the thumbnail from result doesn't invalidate the verification; the help-embed evidence stands.
+- The asset at `assets/disculate.webp` and `manifest.json:icon_url` are unchanged — the marketplace listing still uses the brand identity.
+- Test count: 272 → 273.
+
 ## [0.2.9] — 2026-05-12
 
 Round V second-order audit fixes. Two MAJOR correctness items, one MINOR, plus a sweep of seven nit-level cleanups. Zero metric-shape change, zero reason-code change; the bounded enum used for `calc_eval` tag values is identical to v0.2.8.

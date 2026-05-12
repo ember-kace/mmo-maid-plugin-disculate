@@ -4,6 +4,28 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.2.11] — 2026-05-12
+
+`/calc-help` polish pass: cleaner title, attribution moves to a small italic line below it, operators promoted from a cramped description row to their own field, new Examples field, Notes broken into bullets.
+
+### Changed
+- **Title:** `Disculate — quick reference` → just `Disculate`. The `— quick reference` suffix was redundant with the embed's content; the cleaner one-word title now matches the marketplace listing.
+- **Title hyperlink removed.** Pre-v0.2.11 the title was clickable via the embed's `url` field, pointing at the marketplace listing. The link moved to an italic attribution line at the top of the description: `*Available on [MMO Maid](https://mmomaid.cloud/)*` — clickable, smaller than the title, less competition with the reference content below.
+- **Operators promoted to their own embed field.** Previously they lived in a single description line (`**Operators** \`+\` \`-\` \`*\` …`) that visually fought with the function-category fields below. Now Operators is the first inline field in the grid (sits beside Basic / Roots-Exp-Log / Trig / Hyperbolic), with each operator on its own line labelled by purpose (`+` add, `-` subtract, `*` multiply, `/` divide, `//` floor-div, `**` power, unary `+`/`-`, parentheses). 5 inline fields total — Discord packs 3+2.
+- **Notes broken into bullets.** Was one paragraph of run-on prose; now five `•`-prefixed lines covering trig angle mode, modulo, `^` vs `**`, floor-div semantics, did-you-mean error suggestions (NEW mention — was implicit), and the unsupported-feature list.
+
+### Added
+- **Examples field** below the inline grid. Five expressions covering common patterns: `(2+1)*7-8` (order of ops), `sqrt(16)` (function call), `1000 * (1 + 5%) ** 10` (compound interest with percent + pow), `sin(pi/2)` (trig with constant), `mod(-7, 3)` (sign-of-divisor reminder). Results shown for the deterministic ones.
+- **`MMOMAID_URL`** constant in `lib/embed.py` (`https://mmomaid.cloud/`). Replaces the old `MARKETPLACE_URL` (which pointed at the specific listing).
+
+### Removed
+- `lib/embed.py:MARKETPLACE_URL` — replaced by `MMOMAID_URL`.
+
+### Notes
+- The brand thumbnail is unchanged (still on `/calc-help` only, top-right).
+- The five-inline-field layout (3+2 packing) is similar in vertical weight to the previous four-inline (3+1), so the embed footprint barely changes despite the added Operators content.
+- Test count: 273 → 276.
+
 ## [0.2.10] — 2026-05-12
 
 Brand thumbnail trimmed back to `/calc-help` only; help title is now a clickable link to the marketplace listing.

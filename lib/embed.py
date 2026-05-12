@@ -42,7 +42,7 @@ BRAND_THUMBNAIL_URL = (
     "https://raw.githubusercontent.com/ember-kace/"
     "mmo-maid-plugin-disculate/main/assets/disculate.webp"
 )
-MARKETPLACE_URL = "https://mmomaid.cloud/marketplace/disculate"
+MMOMAID_URL = "https://mmomaid.cloud/"
 _BRAND_THUMBNAIL: Dict[str, str] = {"url": BRAND_THUMBNAIL_URL}
 
 EMBED_TITLE_MAX = 256
@@ -323,10 +323,12 @@ def build_config_error_embed(errors: List[str]) -> Dict[str, Any]:
 
 def _build_help_payload() -> Dict[str, Any]:
     """Generate help payload (description, fields, footer) from FUNCTIONS +
-    CONSTANTS so it can't drift. Categories are emitted in CATEGORY_ORDER;
-    functions inside each category follow their declaration order in
-    FUNCTIONS. Runtime limits come from their canonical modules so the
-    footer always reflects the active values.
+    CONSTANTS so it can't drift. Function categories are emitted in
+    CATEGORY_ORDER and follow their declaration order inside each category.
+    Operators are not in CATEGORY_ORDER (they're not functions); they live
+    in a hand-rolled "Operators" field that mirrors the category grid.
+    Runtime limits come from their canonical modules so the footer always
+    reflects the active values.
     """
     by_cat: Dict[str, List[str]] = {cat_id: [] for cat_id, _ in CATEGORY_ORDER}
     for spec in FUNCTIONS:
@@ -335,14 +337,36 @@ def _build_help_payload() -> Dict[str, Any]:
     constants_line = "  ".join(f"`{name}`" for name in sorted(CONSTANTS))
 
     description = "\n".join([
-        "**Operators**  `+`  `-`  `*`  `/`  `//`  `**`  unary `+`/`-`  parens",
+        f"*Available on [MMO Maid]({MMOMAID_URL})*",
+        "",
         "**Percent**  trailing `%` divides by 100 — e.g. `50%` = `0.5`",
         f"**Constants**  {constants_line}  *(case-sensitive)*",
     ])
 
+    fields: List[Dict[str, Any]] = []
+
+    # Operators field — one entry per operator with a short label, so
+    # users can tell `//` (floor-div) from `**` (power) at a glance.
+    # Placed first so the order in the rendered grid is intuitive:
+    # operators -> basic functions -> rest.
+    operators_value = "\n".join([
+        "`+`  add",
+        "`-`  subtract",
+        "`*`  multiply",
+        "`/`  divide",
+        "`//`  floor-div",
+        "`**`  power",
+        "unary `+` `-`",
+        "parentheses",
+    ])
+    fields.append({
+        "name": "Operators",
+        "value": clip(operators_value, EMBED_FIELD_VALUE_MAX),
+        "inline": True,
+    })
+
     # One inline field per function category. Functions render one-per-line
     # inside each field so Discord's narrow column doesn't wrap awkwardly.
-    fields: List[Dict[str, Any]] = []
     for cat_id, cat_label in CATEGORY_ORDER:
         items = by_cat.get(cat_id, [])
         if not items:
@@ -354,17 +378,34 @@ def _build_help_payload() -> Dict[str, Any]:
             "inline": True,
         })
 
-    notes = (
-        "Trig honours `/calc-config angle_mode` (radians by default). "
-        "Modulo via `mod(a, b)`. `^` is not power — use `**`. "
-        "Floor-division `//` rounds toward negative infinity "
-        "(Python semantics): `-7 // 2` = `-4`, not `-3`. "
-        "Bitwise ops, factorial, variables, `inf`/`nan` literals, and "
-        "comparisons are not supported."
-    )
+    # Examples field — short, full-width, sits below the inline grid.
+    examples_value = "\n".join([
+        "`(2+1)*7-8`  →  `13`",
+        "`sqrt(16)`  →  `4`",
+        "`1000 * (1 + 5%) ** 10`  →  compound interest, 10 years at 5%",
+        "`sin(pi/2)`  →  `1`",
+        "`mod(-7, 3)`  →  `2`  *(sign follows divisor)*",
+    ])
+    fields.append({
+        "name": "Examples",
+        "value": clip(examples_value, EMBED_FIELD_VALUE_MAX),
+        "inline": False,
+    })
+
+    # Notes — broken into bullet lines so each quirk is scannable on its
+    # own, rather than one wall of prose.
+    notes_value = "\n".join([
+        "• Trig honours `/calc-config angle_mode` (radians by default).",
+        "• Modulo via `mod(a, b)`. `^` is not power — use `**`.",
+        "• Floor-division `//` rounds toward negative infinity: `-7 // 2` = `-4`, not `-3`.",
+        "• Errors include a *did-you-mean* suggestion for close-typo "
+        "function and constant names.",
+        "• Bitwise ops, factorial, variables, `inf`/`nan` literals, and "
+        "comparisons are not supported.",
+    ])
     fields.append({
         "name": "Notes",
-        "value": clip(notes, EMBED_FIELD_VALUE_MAX),
+        "value": clip(notes_value, EMBED_FIELD_VALUE_MAX),
         "inline": False,
     })
 
@@ -384,12 +425,13 @@ def _build_help_payload() -> Dict[str, Any]:
 def build_help_embed() -> Dict[str, Any]:
     payload = _build_help_payload()
     embed = {
-        "title": "Disculate — quick reference",
-        # Making the title clickable links it to the marketplace listing
-        # (Discord renders embed title as a hyperlink when `url` is set).
-        # v0.2.10 — single discoverable jump from the help card to the
-        # plugin's marketplace page.
-        "url": MARKETPLACE_URL,
+        "title": "Disculate",
+        # v0.2.11: title is no longer a hyperlink. The MMO Maid platform
+        # link lives as an italic attribution line at the top of the
+        # description — clickable via standard markdown link syntax,
+        # smaller than the title (description-size, italic), and reads
+        # as "where to find this plugin" without competing visually
+        # with the reference content below.
         "description": clip(payload["description"], EMBED_DESC_MAX),
         "color": COLOR_INFO,
         "thumbnail": _BRAND_THUMBNAIL,

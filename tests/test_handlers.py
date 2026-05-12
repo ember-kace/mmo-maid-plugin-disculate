@@ -163,7 +163,11 @@ def test_calc_help_returns_help_embed():
 
 
 def test_help_embed_uses_field_grid():
-    """Lock the field-grid layout (v0.2.3) against future regression."""
+    """Lock the field-grid layout (v0.2.3 + v0.2.11) against regression.
+
+    Inline fields (pack 3-per-row): Operators + every function category.
+    Full-width fields (own row each): Examples, Notes.
+    """
     from lib.functions import CATEGORY_ORDER
     ctx = FakeCtx()
     plugin_module.cmd_calc_help(ctx, slash_event("calc-help"))
@@ -172,13 +176,14 @@ def test_help_embed_uses_field_grid():
     # Every function category appears as its own field.
     for _, label in CATEGORY_ORDER:
         assert label in field_names, f"{label} category missing as a field"
-    # Notes field is full-width (non-inline) — it's the operational
-    # caveats block.
-    notes_field = next((f for f in embed["fields"] if f["name"] == "Notes"), None)
-    assert notes_field is not None and notes_field.get("inline") is False
-    # Category fields are inline so Discord packs them as a grid.
+    # v0.2.11 — Operators promoted from description-line to its own field.
+    assert "Operators" in field_names
+    # Notes + Examples are full-width.
+    full_width_names = {"Notes", "Examples"}
     for f in embed["fields"]:
-        if f["name"] != "Notes":
+        if f["name"] in full_width_names:
+            assert f.get("inline") is False, f"{f['name']} should be full-width"
+        else:
             assert f.get("inline") is True, f"{f['name']} should be inline"
 
 
@@ -434,14 +439,61 @@ def test_help_embed_carries_brand_thumbnail():
     assert embed.get("thumbnail", {}).get("url") == BRAND_THUMBNAIL_URL
 
 
-def test_help_embed_title_links_to_marketplace():
-    """v0.2.10: /calc-help title is a hyperlink to the marketplace listing."""
-    from lib.embed import MARKETPLACE_URL
+def test_help_embed_title_is_disculate_without_url():
+    """v0.2.11: title is just 'Disculate' (no '— quick reference'),
+    and the title is no longer a hyperlink (no `url` field)."""
     ctx = FakeCtx()
     plugin_module.cmd_calc_help(ctx, slash_event("calc-help"))
     embed = _embed(_first_response(ctx))
-    assert embed.get("url") == MARKETPLACE_URL
-    assert MARKETPLACE_URL.startswith("https://")
+    assert embed.get("title") == "Disculate"
+    assert "url" not in embed
+
+
+def test_help_embed_links_to_mmomaid_platform_in_description():
+    """v0.2.11: the MMO Maid platform link sits as an italic attribution
+    line at the top of the description, smaller than the title."""
+    from lib.embed import MMOMAID_URL
+    ctx = FakeCtx()
+    plugin_module.cmd_calc_help(ctx, slash_event("calc-help"))
+    embed = _embed(_first_response(ctx))
+    desc = embed.get("description", "")
+    assert MMOMAID_URL in desc
+    assert "MMO Maid" in desc
+    assert MMOMAID_URL.startswith("https://")
+
+
+def test_help_embed_has_operators_field():
+    """v0.2.11: Operators promoted from a cramped description line to
+    a full field next to Basic / Roots / Trig / Hyperbolic."""
+    ctx = FakeCtx()
+    plugin_module.cmd_calc_help(ctx, slash_event("calc-help"))
+    embed = _embed(_first_response(ctx))
+    operators_field = next(
+        (f for f in embed.get("fields", []) if f["name"] == "Operators"),
+        None,
+    )
+    assert operators_field is not None
+    assert operators_field.get("inline") is True
+    value = operators_field["value"]
+    for op in ("`+`", "`-`", "`*`", "`/`", "`//`", "`**`", "unary", "parentheses"):
+        assert op in value, f"operator/label {op!r} missing from Operators field"
+
+
+def test_help_embed_has_examples_field():
+    """v0.2.11: Examples field shows a few illustrative expressions."""
+    ctx = FakeCtx()
+    plugin_module.cmd_calc_help(ctx, slash_event("calc-help"))
+    embed = _embed(_first_response(ctx))
+    examples_field = next(
+        (f for f in embed.get("fields", []) if f["name"] == "Examples"),
+        None,
+    )
+    assert examples_field is not None
+    assert examples_field.get("inline") is False
+    # Spot-check a few expressions
+    value = examples_field["value"]
+    assert "sqrt(16)" in value
+    assert "sin(pi/2)" in value
 
 
 def test_config_updated_embed_has_no_brand_thumbnail():

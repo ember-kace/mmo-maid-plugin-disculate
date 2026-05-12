@@ -103,21 +103,59 @@ def clip(s: str, n: int) -> str:
 
 
 def enforce_total_cap(embed: Dict[str, Any], max_total: int = EMBED_TOTAL_MAX) -> Dict[str, Any]:
-    title = embed.get("title", "") or ""
-    desc = embed.get("description", "") or ""
-    fields = embed.get("fields", []) or []
-    footer_text = (embed.get("footer") or {}).get("text", "") or ""
-    total = (
-        len(title)
-        + len(desc)
-        + sum(len(f.get("name", "")) + len(f.get("value", "")) for f in fields)
-        + len(footer_text)
-    )
+    """Cap the embed's total visible-text length at `max_total`
+    (default 5800 — 200-char margin under Discord's 6000-char limit).
+
+    Two passes:
+      1. Trim the description (the elastic field).
+      2. If still over, trim or drop fields from the END so the
+         most-important (first-declared) survive.
+
+    Pre-v0.2.9 (Round V V2-01) only pass 1 ran — field-heavy embeds
+    could exceed the cap and trip Discord's hard 6000 limit.
+    """
+    def _total(e: Dict[str, Any]) -> int:
+        return (
+            len(e.get("title", "") or "")
+            + len(e.get("description", "") or "")
+            + sum(
+                len(f.get("name", "")) + len(f.get("value", ""))
+                for f in (e.get("fields") or [])
+            )
+            + len((e.get("footer") or {}).get("text", "") or "")
+        )
+
+    total = _total(embed)
     if total <= max_total:
         return embed
-    overage = total - max_total
-    new_desc_len = max(0, len(desc) - overage - 50)
-    embed["description"] = clip(desc, new_desc_len) if new_desc_len > 0 else ""
+
+    # Pass 1: trim description.
+    desc = embed.get("description", "") or ""
+    if desc:
+        overage = total - max_total
+        new_len = max(0, len(desc) - overage - 50)
+        embed["description"] = clip(desc, new_len) if new_len > 0 else ""
+        total = _total(embed)
+        if total <= max_total:
+            return embed
+
+    # Pass 2: trim/drop fields from the end. Halve each value; if that
+    # didn't actually shrink it (e.g. already < 2 chars), drop the field.
+    fields = list(embed.get("fields") or [])
+    while fields and _total(embed) > max_total:
+        last_idx = len(fields) - 1
+        last = fields[last_idx]
+        value = last.get("value", "")
+        if len(value) <= 1:
+            fields.pop()
+        else:
+            new_value = clip(value, max(0, len(value) // 2 - 10))
+            if new_value == value:
+                fields.pop()
+            else:
+                fields[last_idx] = {**last, "value": new_value}
+        embed["fields"] = fields
+
     return embed
 
 

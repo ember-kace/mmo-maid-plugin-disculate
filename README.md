@@ -37,18 +37,23 @@ Built for the MMO Maid platform's sandboxed plugin runtime. Safe-tier capabiliti
 
 | Input | Output |
 |---|---|
-| `2 + 2` | `4` |
-| `1/3` | `0.333333` (precision-dependent) |
-| `200 * 5%` | `10` |
-| `100 + 10%` | `100.1` (10% = `0.1`, **not** "10% of 100"; see [ARCHITECTURE.md §B](ARCHITECTURE.md)) |
-| `sqrt(2)` | `1.414214` |
-| `sin(30)` with `angle_mode:deg` | `0.5` |
-| `mod(-7, 3)` | `2` (sign-of-divisor) |
+| `2 + 2` | `= 4` |
+| `1/3` | `= 0.333333` (precision-dependent) |
+| `200 * 5%` | `= 10` |
+| `100 + 10%` | `= 100.1` (10% = `0.1`, **not** "10% of 100"; see [ARCHITECTURE.md §B](ARCHITECTURE.md)) |
+| `sqrt(2)` | `= 1.414214` |
+| `sin(30)` with `angle_mode:deg` | `= 0.5` |
+| `mod(-7, 3)` | `= 2` (sign-of-divisor) |
+| `(2+1)*7-8` | `= 13` with a Steps field showing the three intermediate computations |
 | `1e308 * 10` | error: *Result is too large to represent.* |
-| `2^3` | error: *Use `**` for power, not `^`.* |
-| `5 % 3` | error: *Use `mod(a, b)` for modulo. Trailing `%` means percent.* |
+| `2^3` | error: *Use `**` for power, not `^` (which would be bitwise XOR).* |
+| `5 % 3` | error: *Use `mod(a, b)` for modulo. Trailing `%` means percent (e.g. `50%` = 0.5).* |
+| `sqirt(2)` | error: *Unknown function `sqirt`. Did you mean `sqrt`?* |
+| `Pi + 1` | error: *Unknown name `Pi`. Constants are case-sensitive. Did you mean `pi`?* |
+| `((1+2)` | error: *Unclosed parenthesis. 1 more `(` than `)`. Add 1 `)` to balance the expression.* |
+| `sqrt(-1)` | error: *`sqrt` of a negative value isn't a real number. Try `sqrt(abs(x))` if you want the magnitude.* |
 
-If you make a common calculator-keyboard mistake (`^` for power, `2(3)` for implicit multiplication, `==` for comparison, etc.), Disculate emits a specific hint pointing at the supported equivalent instead of a generic "syntax not allowed."
+Errors aren't generic. Disculate identifies the specific problem in your input — close-typo suggestions for unknown names and functions, paren-balance counts, function-specific domain explanations, operator-mistake hints. Every error embed shows what's wrong on top, how to fix it next, and a `reason: <code>` footer for tracking.
 
 ## Configuration
 
@@ -76,17 +81,18 @@ See [AUDIT-REPORT.md](AUDIT-REPORT.md) for the full audit trail.
 ```powershell
 # Requirements: Python 3.11+ (tested on 3.11–3.14)
 
-# Run the test suite (195 tests, ~0.1s)
+# Run the test suite (247 tests, ~0.1s)
 py -m pytest tests/ -q
 
 # Build the deterministic production bundle (build/disculate.zip)
 py tools/build_bundle.py
 
-# Run all 7 audit gates (manifest, imports, no_eval, todo_markers, plugin_run, pytest, bundle)
+# Run all 8 audit gates (manifest, imports, blocked_substrings, no_eval_ast,
+#                       todo_markers, plugin_run, pytest, bundle)
 py tools/run_audit.py
 ```
 
-The bundle excludes everything outside an explicit allowlist (see `tools/build_bundle.py:INCLUDED_FILES`). Tests, tools, documentation, and dotfiles never ship.
+The bundle excludes everything outside an explicit allowlist (see `tools/build_bundle.py:INCLUDED_FILES`). Tests, tools, documentation, dotfiles, and `assets/` never ship — Discord fetches the brand image directly from the GitHub raw URL.
 
 ## Project layout
 
@@ -94,20 +100,23 @@ The bundle excludes everything outside an explicit allowlist (see `tools/build_b
 disculate/
 ├── manifest.json            ← plugin id, capabilities, slash commands
 ├── plugin.py                ← handler entry points (must end with plugin.run())
+├── assets/
+│   └── disculate.webp       ← brand thumbnail, referenced by Discord via GitHub raw URL
 ├── lib/
 │   ├── parser.py            ← cleaning, percent preprocessing, ast.parse + allowlist walker
-│   ├── walker.py            ← AST walk, DoS guards, wall-clock budget
+│   ├── walker.py            ← AST walk, DoS guards, wall-clock budget, step trace
 │   ├── functions.py         ← FunctionSpec registry (one entry per math function)
 │   ├── format.py            ← result formatting (precision, scientific, int preservation)
 │   ├── config.py            ← per-server KV config + schema versioning
 │   ├── embed.py             ← response builders + safe_text/clip/help generation
+│   ├── diagnostics.py       ← per-reason error explainer + did-you-mean
 │   ├── reasons.py           ← reason codes + user-facing hints
 │   └── logctx.py            ← request_id ContextVar for log correlation
-├── tests/                   ← 195 tests: smoke, unit, handler, failure-injection, adversarial
+├── tests/                   ← 247 tests: smoke, unit, handler, failure-injection, adversarial, diagnostics
 ├── tools/
 │   ├── build_bundle.py      ← deterministic zip with allowlist guard
-│   └── run_audit.py         ← 7 audit gates
-└── docs (CLAUDE.md, AUDIT-REPORT.md, ARCHITECTURE.md, RUNBOOK.md, SDK-ASSUMPTIONS.md)
+│   └── run_audit.py         ← 8 audit gates (incl. marketplace-substring mirror)
+└── docs (CLAUDE.md, AUDIT-REPORT.md, ARCHITECTURE.md, RUNBOOK.md, SDK-ASSUMPTIONS.md, CHANGELOG.md)
 ```
 
 ## Documentation
@@ -130,9 +139,9 @@ Before opening a PR:
 
 ```powershell
 py -m pytest tests/ -q   # all green
-py tools/run_audit.py    # all 7 gates pass
+py tools/run_audit.py    # all 8 gates pass
 ```
 
 ## License
 
-No license file ships with the repository. By default, this means the work is **all rights reserved** to its author — read, but don't redistribute or build derivatives without permission. A formal license may be added later.
+This repository ships **without a `LICENSE` file**. Under default GitHub / copyright terms that means **all rights reserved** to the author — the source is publicly readable, but redistribution, derivative works, and commercial use are not granted. A formal open-source license may be added later; until then, please open an issue if you'd like to use any of this code outside the context of forking + contributing back.

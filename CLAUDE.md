@@ -25,7 +25,8 @@ In-Discord calculator. `/calc expression:<text>` parses the expression with stdl
 | `lib/parser.py` | `clean_expression` (NFKC + length + control-char reject) → `preprocess_percent` → `ast.parse` → `_validate` (node allowlist + depth + count). |
 | `lib/walker.py` | Walks the validated tree with a wall-clock budget. Pow routes very-large int operands through `math.pow` to clamp at float overflow. Named `walker` (not `evaluator`) to avoid the marketplace's substring scanner — see CHANGELOG v0.2.1. |
 | `lib/format.py` | int preservation, thousands separators, trailing-zero trim, scientific notation when over threshold. |
-| `lib/embed.py` | `safe_text` (markdown/mention scrub) + `clip` + `enforce_total_cap`. Builders for result / error / cooldown / config / help embeds. |
+| `lib/embed.py` | `safe_text` / `safe_text_in_code` / `clip` / `enforce_total_cap`. Builders for result / error / cooldown / config / help embeds. Embeds the brand thumbnail via `BRAND_THUMBNAIL_URL` on success cards. |
+| `lib/diagnostics.py` | Per-reason error explainer. `explain(expression, reason, detail) -> (what, how)`. Drives the description text inside the red error embed; fall-through to canonical hint for unhandled reasons. |
 
 ## KV schema cheatsheet
 
@@ -48,15 +49,15 @@ See `SDK-ASSUMPTIONS.md` for the full list. Two notable ones:
 ## Tests and conventions
 
 - Run: `py -m pytest tests/ -q` from project root.
-- Current count: 175 tests, all green.
-- Layout: one `test_<module>.py` per `lib/` module, plus `test_handlers.py`, `test_stub_contract.py`, `test_failure_injection.py`, `test_adversarial.py`.
+- Current count: 247 tests, all green.
+- Layout: one `test_<module>.py` per `lib/` module, plus `test_handlers.py`, `test_stub_contract.py`, `test_failure_injection.py`, `test_adversarial.py`, `test_diagnostics.py`.
 - `tests/conftest.py` stubs `mmo_maid_sdk` so the plugin imports without the real runtime. `test_stub_contract.py` locks the stub surface to what `plugin.py` actually uses.
 
 ## Build and bundle
 
 - Build: `py tools/build_bundle.py` → writes `build/disculate.zip` (deterministic, mtime=0).
-- Audit: `py tools/run_audit.py` runs all gates (manifest, imports, no_eval, todo_markers, plugin_run, pytest, bundle).
-- Bundle includes only the explicit allowlist in `tools/build_bundle.py:INCLUDED_FILES`. Tests, tools, docs, `__pycache__`, dotfiles, and `*.md` are excluded by virtue of not being on the list.
+- Audit: `py tools/run_audit.py` runs all 8 gates (manifest, imports, blocked_substrings, no_eval_ast, todo_markers, plugin_run, pytest, bundle). `blocked_substrings` is the post-v0.2.1 mirror of the marketplace's substring scanner; `no_eval_ast` is the more-precise AST check.
+- Bundle includes only the explicit allowlist in `tools/build_bundle.py:INCLUDED_FILES`. Tests, tools, docs, `__pycache__`, dotfiles, `assets/`, and `*.md` are excluded by virtue of not being on the list. The brand image lives in `assets/` and is fetched by Discord from `raw.githubusercontent.com` at render time — never bundled.
 
 ## Things that look wrong but aren't
 
@@ -79,7 +80,7 @@ See `SDK-ASSUMPTIONS.md` for the full list. Two notable ones:
 - **`safe_text_in_code` is intentionally less strict than `safe_text`** (v0.2.7). The expression echo lives inside Discord inline-code spans where `**`, `__`, `~~`, `||` render literally — stripping them (as `safe_text` does) makes the displayed expression lie about what the user typed. Only `safe_text_in_code` should be used for content that will be wrapped in single backticks. Strict `safe_text` is still right for descriptions, headers, field values that ARE outside backticks.
 - **The brand thumbnail URL is hard-coded to `raw.githubusercontent.com/.../main/assets/disculate.webp`** (v0.2.5). Discord caches image URLs aggressively; if we ever rename or move the file, every existing card breaks. Rebrand = REPLACE the asset binary in place (overwrite `assets/disculate.webp`), commit, push. The URL stays the same; Discord re-fetches within minutes. Defined once as `BRAND_THUMBNAIL_URL` in `lib/embed.py`, reused for both the embed thumbnail and `manifest.json:icon_url`.
 - **`assets/disculate.webp` is NOT in `tools/build_bundle.py:INCLUDED_FILES`** (v0.2.5). The brand image is referenced by URL — Discord fetches it from GitHub at render time. Adding it to the bundle would inflate the upload zip for no benefit. The asset must be committed and pushed to `main` for the URL to resolve.
-- **Version is 0.2.0, not 1.0.0.** The handoff's semver policy reserves major bumps for breaking changes; the inaugural release ships as 0.1.0 and v1.0.0 comes after the post-deploy SDK-assumption probe (S3).
+- **Version is 0.2.x, not 1.0.0.** The handoff's semver policy reserves major bumps for breaking changes; the inaugural release shipped as 0.1.0 and v1.0.0 comes after the SDK-assumption probe completes (`SDK-ASSUMPTIONS.md`). The 0.2.x sub-series has accumulated: marketplace-substring fix (0.2.1), SDK event-shape correction (0.2.2), embed polish (0.2.3), step trace (0.2.4), brand thumbnail (0.2.5), implicit-mult hint extension (0.2.6), `**` display fix (0.2.7), diagnostic explainer (0.2.8). See CHANGELOG.
 
 ## Project conventions
 

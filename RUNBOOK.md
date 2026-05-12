@@ -58,13 +58,15 @@ We do not cache calc results. This scenario is intentionally not applicable.
 
 ## 6 — Rollback
 
-**Symptom:** v1.0.1 (hypothetical) ships a regression.
-**Behavior:** Depends on the regression.
+**Symptom:** A patch release ships a regression — e.g. v0.2.7 silently broke `/calc-help` rendering.
+**Behavior:** Depends on the regression. Math is unaffected by anything in the embed-builder or diagnostics layer; rollback restores the prior visual + UX state.
 **Action:**
-1. Bisect via `tools/run_audit.py` on the previous tagged commit.
-2. Rebuild bundle from the previous good commit (`py tools/build_bundle.py`).
-3. Re-upload the previous version through the platform's plugin manager.
-**Recovery:** Platform redeploys the previous version. KV is unaffected; cooldowns are ephemeral and rebuild themselves.
+1. `git log --oneline` to find the last known-good commit (typically the v0.2.{N-1} version commit).
+2. `git checkout <commit>` (read-only — don't reset `main`).
+3. `py tools/build_bundle.py` to rebuild `build/disculate.zip` from that tree.
+4. Re-upload via the MMO Maid plugin manager.
+5. Once stable in production, decide whether to revert on `main` (`git revert <bad-commit>`) or leave the bad commit in history with a forward-fix patch.
+**Recovery:** Platform redeploys the previous version. KV config is unaffected (schema-versioned reads tolerate downgrades within the same `CONFIG_SCHEMA_V`). Cooldowns are ephemeral and rebuild themselves within 2 seconds.
 
 ---
 
@@ -118,6 +120,6 @@ Re-open a Round 4 audit if any of these hold for a week of post-deploy data:
 - `result:overflow` or `result:domain_error` rate exceeds 5%/day (suggests a missing operator or function users genuinely want).
 - Worker p99 RSS exceeds 50 MB.
 - Any `level:error` log with a previously-unseen exception type fires more than 0.1%/day.
-- SDK assumption A1–A10 turns out wrong (`SDK-ASSUMPTIONS.md`).
+- A new SDK assumption (`SDK-ASSUMPTIONS.md` A1–A11) turns out wrong — particularly A1 (embed forwarding), A6 (allowed_mentions), or A11 (thumbnail). Mark the entry WRONG with a one-line note in that file and patch as documented in each entry's "Fallback if wrong" section.
 
 Otherwise, ship is stable.

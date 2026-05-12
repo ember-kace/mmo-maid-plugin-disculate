@@ -1,6 +1,6 @@
 # AUDIT-REPORT.md — Disculate
 
-**Verdict:** PASS for v0.2.1 ship (post-marketplace-rejection refactor).
+**Verdict:** PASS for v0.2.8 ship (post-diagnostic-explainer release).
 
 | Round | Verdict | Findings | Action |
 |---|---|---|---|
@@ -8,9 +8,10 @@
 | R2 — Tailored, generic (v0.1.0) | PASS | 0 BLOCKER, 0 MAJOR, 3 MINOR (deferred or accepted) | All scope/design decisions documented. |
 | R3 — Deep (v0.1.0) | PASS | 0 BLOCKER, 0 MAJOR, 5 INFO | Logged into SDK-ASSUMPTIONS.md and RUNBOOK.md. |
 | T — Tailored, math-shape-specific (v0.2.0) | PASS | 0 BLOCKER, 3 MAJOR (fixed), 6 MINOR (mostly fixed), 4 NIT (mostly fixed), 3 ENHANCE (deferred) | All MAJORs and most MINORs fixed; ENHANCE items in backlog. |
-| **U — Marketplace-validator escape (v0.2.1)** | **PASS** | **1 BLOCKER (fixed) + new audit gate** | File + identifier rename + substring-based local gate to mirror the marketplace's scanner. |
+| U — Marketplace-validator escape (v0.2.1) | PASS | 1 BLOCKER (fixed) + new audit gate | File + identifier rename + substring-based local gate to mirror the marketplace's scanner. |
+| **Post-launch UX hardening (v0.2.2 – v0.2.8)** | **PASS** | **3 production-found bugs (fixed), 4 UX improvements shipped** | See "Post-launch findings" section below. |
 
-Audit gates: all 8 green (`py tools/run_audit.py`). Tests: 195/195 green (unchanged from v0.2.0).
+Audit gates: all 8 green (`py tools/run_audit.py`). Tests: 247/247 green (was 195 at v0.2.0; the +52 covers diagnostics, step trace, brand thumbnail, header-hero layout, and SDK shape regression locks).
 
 ---
 
@@ -261,3 +262,48 @@ The validator uses **substring matching**, not Python parsing. Our `_eval(...)` 
 **Status:** Fixed. All 8 audit gates green, 195 tests green, zero `eval(`/`exec(`/`__import__(` substrings in any shipped file.
 
 **Lesson for future rounds:** When the local audit and the platform's validator use different matching strategies, the local audit is at best an under-approximation of what the platform will accept. Mirror the platform's strategy when possible — even if it's naive — so failures happen at audit time, not at upload.
+
+---
+
+## Post-launch findings (v0.2.2 – v0.2.8)
+
+Production traffic surfaced three real bugs that pre-launch testing missed, plus motivated four UX improvements. Each was shipped as a patch release on `main` directly; no separate audit-round artifacts. The CHANGELOG carries the full detail per version.
+
+### v0.2.2 — SDK event-shape correction (BLOCKER, fixed)
+
+**Symptom:** Every `/calc` invocation returned `reason: empty` in production despite users typing real expressions. Cooldown keys bucketed under `cd:calc:unknown`.
+
+**Root cause:** Our test fixtures emitted the SDK shape from the SDK doc's example (`event["options"]`, `event["member"]["user"]["id"]`). The actual runtime delivers `event["command_options"]` and `event["user_id"]` at the top level. Tests passed against a fiction.
+
+**Fix:** `_options`, `_user_id`, `_is_admin` now read the observed shape first, fall back to the doc shape. Test fixtures updated. Regression test in `tests/test_handlers.py:test_calc_with_real_sdk_event_shape_evaluates_expression` uses a verbatim production payload.
+
+**Lesson:** SDK doc examples are advisory, not authoritative. The first probe after a marketplace install should always be "send a real interaction, log the raw payload, compare to assumptions."
+
+### v0.2.6 — Implicit-mult hint regex symmetry (MINOR, fixed)
+
+**Symptom:** `/calc 1000 * (1 + 7%)  10` (missing operator between `)` and `10`) returned generic `parse_error` instead of the `WANT_EXPLICIT_MULT` hint that v0.2.0 added for the symmetric `2(3)` / `2pi` case.
+
+**Fix:** Six-character regex extension on `_IMPLICIT_MULT_RE`: added `\)\s*\d|\)\s*[A-Za-z_]` alternates.
+
+**Lesson:** When a hint regex covers "X then Y", check whether the symmetric "Y then X" deserves the same hint.
+
+### v0.2.7 — Expression-echo `**` stripping (MAJOR, fixed)
+
+**Symptom:** `/calc 2**8` rendered `2  8` (double space, no operator) in the embed's expression echo. Math still computed correctly (`= 256`); only the display lied.
+
+**Root cause:** `lib/embed.py:safe_text` aggressively strips every markdown marker (`**`, `__`, `~~`, `||`, `` ` ``) — including `**`, which is a legitimate Python Pow operator. The strip happens before the expression is wrapped in inline-code backticks; Discord doesn't actually interpret `**` inside backticks anyway.
+
+**Fix:** New `safe_text_in_code` helper that keeps markdown chars but still strips backticks (the only chars that genuinely break the inline-code context). Used for the expression echo in `build_result_embed` and `build_error_embed`.
+
+**Lesson:** Sanitisation should be context-aware. The same string going into a `## header` vs an inline `` `code` `` span has different sensitivities; using strict scrub for both was the bug.
+
+### v0.2.3 / v0.2.4 / v0.2.5 / v0.2.8 — UX additions
+
+Each motivated by direct user feedback rather than an audit finding:
+
+- **v0.2.3** — Header-hero result + field-grid help. See ARCHITECTURE §I.
+- **v0.2.4** — Step trace with smart-auto threshold. See ARCHITECTURE §J.
+- **v0.2.5** — Brand thumbnail on success embeds. See ARCHITECTURE §K. Verified SDK A11 (embed thumbnail kwarg).
+- **v0.2.8** — Diagnostic explainer with did-you-mean. See ARCHITECTURE §L.
+
+### Status: All 247 tests green, all 8 audit gates green, no known regressions in production.

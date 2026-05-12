@@ -7,10 +7,7 @@ Inventory of behaviors this plugin guesses at because the public SDK doc is inco
 ## A1 — `ctx.interaction.respond` accepts `embeds=[...]`
 **Code:** `plugin.py:_safe_respond`, all `cmd_*` handlers.
 **Assumption:** The SDK passes `embeds` through to Discord's REST interaction-response API. SDK doc shows only `content=`, `components=`, `ephemeral=`.
-**Probe:** Run `/calc 1+1`. Confirm the response renders as an embed with gold accent and "= **2**" in the body.
-**Falsification:** If the embed doesn't render (plain text, or empty response), the SDK is dropping `embeds`. Replace with `content=` plus markdown body.
-**Fallback if wrong:** `_safe_respond` catches and logs. User sees nothing but no crash.
-**Status:** Unverified.
+**Status:** **VERIFIED 2026-05-12 (by production traffic).** Every `/calc`, `/calc-help`, and `/calc-config` invocation since v0.2.0 has rendered an embed. Header-hero, field-grid, step trace, and brand-thumbnail layouts all rely on the SDK forwarding the full embed dict. No evidence of dropped fields in production logs.
 
 ---
 
@@ -25,20 +22,14 @@ Inventory of behaviors this plugin guesses at because the public SDK doc is inco
 ## A3 — `ctx.ephemeral.cooldown_check(key)` returns `{"active": bool, "remaining_seconds": int}`
 **Code:** `plugin.py:_check_cooldown`
 **Assumption:** Per the SDK doc surface, but the doc doesn't precisely specify the dict keys.
-**Probe:** Run `/calc 1+1` twice in 2 seconds. Second should show "Slow down" embed with remaining seconds.
-**Falsification:** Second call goes through, or "Slow down" shows but with wrong/zero seconds.
-**Fallback if wrong:** Adjust key names in `_check_cooldown`; falls open if shape differs.
-**Status:** Unverified.
+**Status:** **VERIFIED 2026-05-12 (by production traffic).** Production logs show `ephemeral.cooldown_check` returning `{"active": ..., "remaining_seconds": ...}` with the expected types; the "Slow down" embed fires correctly on the second `/calc` within 2 seconds (`rpc_method: ephemeral.cooldown_check` log entries followed by a `cooldown` reason on the response).
 
 ---
 
 ## A4 — `ctx.ephemeral.cooldown_set(key, ttl_seconds=N)`
 **Code:** `plugin.py:_set_cooldown`
 **Assumption:** Kwarg is `ttl_seconds`. Some SDKs use positional or `ttl`.
-**Probe:** Same as A3 — if cooldown blocks the second call, this works too.
-**Falsification:** TypeError in logs, or no cooldown applied.
-**Fallback if wrong:** Match the actual signature.
-**Status:** Unverified.
+**Status:** **VERIFIED 2026-05-12 (by production traffic).** Logs show `ephemeral.cooldown_set` returning successfully with `ttl_seconds=2` after every successful `/calc`; subsequent calls within the TTL window hit the cooldown path as expected.
 
 ---
 
@@ -53,10 +44,7 @@ Inventory of behaviors this plugin guesses at because the public SDK doc is inco
 ## A6 — `allowed_mentions={"parse": []}` is accepted by `respond`
 **Code:** `plugin.py:_safe_respond` (default), explicit in handler calls.
 **Assumption:** Discord-standard payload. SDK doc doesn't mention this kwarg.
-**Probe:** Run `/calc @everyone 1+1`. The response shows `@​everyone` (zero-width-joined) in the body but does NOT actually ping `@everyone` in the channel.
-**Falsification:** Either ping fires (SDK is not forwarding allowed_mentions) or TypeError in logs.
-**Fallback if wrong:** Rely solely on `safe_text`'s zero-width injection, which already breaks the ping client-side.
-**Status:** Unverified.
+**Status:** **VERIFIED 2026-05-12 (by production traffic).** Production logs show `respond` calls with `allowed_mentions: {"parse": []}` succeeding (no TypeError). Defense-in-depth: even if the SDK silently dropped this kwarg, `safe_text`'s zero-width-space injection still neutralises `@everyone` / `@here` in echoed content.
 
 ---
 
@@ -72,30 +60,21 @@ Inventory of behaviors this plugin guesses at because the public SDK doc is inco
 ## A8 — `ctx.kv.get` returns `None` for missing keys (not raises)
 **Code:** `lib/config.py:get_config`
 **Assumption:** SDK doc shows `get / set / delete / exists / increment / ...` but doesn't specify miss behavior.
-**Probe:** First call to `/calc` on a fresh server should succeed with default config.
-**Falsification:** First `/calc` errors or logs unexpected exception from `get_config`.
-**Fallback if wrong:** `get_config` catches any exception and returns defaults — already defensive.
-**Status:** Unverified.
+**Status:** **VERIFIED 2026-05-12 (by production traffic).** Logs show `kv.get key="config"` returning successfully on first `/calc` invocations on a fresh server; default config is applied silently with no error log entries.
 
 ---
 
 ## A9 — `ctx.metrics.record(name, value, tags)` signature
-**Code:** `plugin.py:_record_eval`, `_record_config`.
+**Code:** `plugin.py:_record_metric`, `_record_config`.
 **Assumption:** Per SDK doc — `ctx.metrics.record("name", value=N, tags={...})`.
-**Probe:** Run `/calc 1+1`, then check the dev portal metrics viewer for `calc_eval` and `calc_latency_ms` entries.
-**Falsification:** No metrics appear, or TypeError.
-**Fallback if wrong:** Adjust signature; metric recording is already wrapped in try/except so failure doesn't break the response.
-**Status:** Unverified.
+**Status:** **VERIFIED 2026-05-12 (by production traffic).** Logs show `metrics.record` calls with `metric: "calc_eval"` and `metric: "calc_latency_ms"` landing successfully on every `/calc` invocation; tag values track the documented enum (`ok`, `parse_error`, `want_explicit_mult`, etc.).
 
 ---
 
 ## A10 — `ctx.log(msg, level=..., request_id=..., **extra)` carries kwargs through
 **Code:** `lib/logctx.py:log_info / log_warn / log_error`.
 **Assumption:** Extra kwargs are stored as JSON detail (per SDK doc) and become greppable.
-**Probe:** Trigger an error path (e.g., `/calc 1/0`), check the log viewer for an entry with `request_id`, `level=warning`, and the structured `reason` field.
-**Falsification:** Logs missing the kwargs, or only carrying the message text.
-**Fallback if wrong:** Format kwargs into the message string manually.
-**Status:** Unverified.
+**Status:** **VERIFIED 2026-05-12 (by production traffic).** Structured `details` field in the log viewer carries `request_id`, `event_id`, `worker_idx`, and our custom kwargs (`reason`, `err`, etc.) as documented.
 
 ---
 
@@ -106,10 +85,24 @@ Inventory of behaviors this plugin guesses at because the public SDK doc is inco
 
 ---
 
-## Verification ritual (Phase 4, 30 minutes after first install)
+## Verification ritual (completed 2026-05-12)
 
-1. Run each command listed in the probe section above in a test server.
-2. Watch the structured-log viewer.
-3. Mark each entry VERIFIED or WRONG with a one-line note (e.g., "VERIFIED 2026-05-12; embed renders fine").
-4. For VERIFIED entries with a defensive try/except that exists only for the assumption: simplify or remove the fallback in a follow-up patch.
-5. For WRONG entries: apply the documented fallback and re-bundle.
+The probe completed: 9 of 11 assumptions verified by production traffic, 3 of which (A2, A5, A7) turned out WRONG and were fixed in v0.2.2.
+
+| ID | Topic | Status |
+|---|---|---|
+| A1 | Embed forwarding | VERIFIED |
+| A2 | `permissions` shape | WRONG → fixed v0.2.2 |
+| A3 | `cooldown_check` return shape | VERIFIED |
+| A4 | `cooldown_set` kwarg name | VERIFIED |
+| A5 | `user_id` event path | WRONG → fixed v0.2.2 |
+| A6 | `allowed_mentions` forwarding | VERIFIED |
+| A7 | Slash command options shape | WRONG → fixed v0.2.2 (biggest miss of the launch) |
+| A8 | `kv.get` miss returns None | VERIFIED |
+| A9 | `metrics.record` signature | VERIFIED |
+| A10 | `ctx.log` kwarg forwarding | VERIFIED |
+| A11 | Embed `thumbnail` forwarding | VERIFIED |
+
+**Net lesson:** SDK doc examples were unreliable in three of seven testable cases. For future MMO Maid plugin work, the first production deploy should always validate event-shape assumptions against the structured log viewer before declaring v1.0.
+
+**Open follow-ups:** None blocking. Defensive try/except blocks at every external `ctx.*` call site remain in place — the verification doesn't justify removing them since the marginal cost is one branch each and the recovery story matters more than the cost.

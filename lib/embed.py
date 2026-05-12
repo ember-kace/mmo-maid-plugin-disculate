@@ -89,14 +89,18 @@ def build_result_embed(
 ) -> Dict[str, Any]:
     expr = clip(safe_text(expression), 200)
     res = clip(safe_text(result_text), 200)
-    desc = f"`{expr}` = **{res}**"
+    # Header-hero layout: small monospace expression on top, large
+    # `##`-header result below. Discord renders `##` inside embed
+    # descriptions as a larger bold heading (markdown headers, post-
+    # 2023). No `**` around the result — the header is already
+    # emphasised; double-bold is noise.
+    desc = f"`{expr}`\n\n## = {res}"
     embed: Dict[str, Any] = {
         "description": clip(desc, EMBED_DESC_MAX),
         "color": COLOR_OK,
     }
-    # The angle mode is only meaningful when the expression actually used
-    # a trig function. Suppress the footer otherwise so /calc 2+2 isn't
-    # cluttered with irrelevant metadata.
+    # Angle mode footer only when the expression actually used a trig
+    # function — keeps non-trig results clean.
     if uses_trig:
         footer = "angle: degrees" if angle_mode == "deg" else "angle: radians"
         embed["footer"] = {"text": clip(footer, EMBED_FOOTER_MAX)}
@@ -104,14 +108,16 @@ def build_result_embed(
 
 
 def build_error_embed(expression: str, reason: str) -> Dict[str, Any]:
+    # Color + reason-code footer already establish "this is an error";
+    # the old "Calc error" title was redundant. Hint becomes the primary
+    # content; the backticked input speaks for itself (no "Input:" label).
     hint = R.hint_for(reason)
     expr = clip(safe_text(expression), 200) if expression else ""
     desc_parts: List[str] = [hint]
     if expr:
-        desc_parts.append(f"\nInput: `{expr}`")
+        desc_parts.append(f"\n`{expr}`")
     desc = "".join(desc_parts)
     embed = {
-        "title": "Calc error",
         "description": clip(desc, EMBED_DESC_MAX),
         "color": COLOR_ERROR,
         "footer": {"text": f"reason: {reason}"},
@@ -167,12 +173,12 @@ def build_config_error_embed(errors: List[str]) -> Dict[str, Any]:
     return enforce_total_cap(embed)
 
 
-def _build_help_text() -> str:
-    """Generate the help block from FUNCTIONS + CONSTANTS so it can't drift.
-
-    Categories are emitted in CATEGORY_ORDER; functions inside each
-    category follow their declaration order in FUNCTIONS. Constants and
-    runtime limits come from their canonical modules.
+def _build_help_payload() -> Dict[str, Any]:
+    """Generate help payload (description, fields, footer) from FUNCTIONS +
+    CONSTANTS so it can't drift. Categories are emitted in CATEGORY_ORDER;
+    functions inside each category follow their declaration order in
+    FUNCTIONS. Runtime limits come from their canonical modules so the
+    footer always reflects the active values.
     """
     by_cat: Dict[str, List[str]] = {cat_id: [] for cat_id, _ in CATEGORY_ORDER}
     for spec in FUNCTIONS:
@@ -180,36 +186,58 @@ def _build_help_text() -> str:
 
     constants_line = "  ".join(f"`{name}`" for name in sorted(CONSTANTS))
 
-    lines = [
-        "**Operators:** `+`  `-`  `*`  `/`  `//`  `**`  unary `+`/`-`  parentheses",
-        "**Percent:** trailing `%` divides by 100, e.g. `50%` = `0.5`, `200 * 5%` = `10`",
-        f"**Constants:** {constants_line}  *(case-sensitive)*",
-        "",
-    ]
+    description = "\n".join([
+        "**Operators**  `+`  `-`  `*`  `/`  `//`  `**`  unary `+`/`-`  parens",
+        "**Percent**  trailing `%` divides by 100 — e.g. `50%` = `0.5`",
+        f"**Constants**  {constants_line}  *(case-sensitive)*",
+    ])
+
+    # One inline field per function category. Functions render one-per-line
+    # inside each field so Discord's narrow column doesn't wrap awkwardly.
+    fields: List[Dict[str, Any]] = []
     for cat_id, cat_label in CATEGORY_ORDER:
         items = by_cat.get(cat_id, [])
         if not items:
             continue
-        lines.append(f"**{cat_label}:** " + "  ".join(f"`{h}`" for h in items))
-    lines += [
-        "",
-        "Trig honours `/calc-config angle_mode` (radians by default).",
-        "Modulo via `mod(a, b)`. `^` is not power — use `**`.",
-        "Bitwise ops, factorial, variables, `inf`/`nan` literals, and comparisons are not supported.",
-        f"Max expression length: {MAX_INPUT_LEN} characters. "
-        f"Evaluation budget: {int(BUDGET_SECONDS * 1000)} ms.",
-    ]
-    return "\n".join(lines)
+        value = "\n".join(f"`{h}`" for h in items)
+        fields.append({
+            "name": clip(cat_label, EMBED_FIELD_NAME_MAX),
+            "value": clip(value, EMBED_FIELD_VALUE_MAX),
+            "inline": True,
+        })
 
+    notes = (
+        "Trig honours `/calc-config angle_mode` (radians by default). "
+        "Modulo via `mod(a, b)`. `^` is not power — use `**`. "
+        "Bitwise ops, factorial, variables, `inf`/`nan` literals, and "
+        "comparisons are not supported."
+    )
+    fields.append({
+        "name": "Notes",
+        "value": clip(notes, EMBED_FIELD_VALUE_MAX),
+        "inline": False,
+    })
 
-HELP_TEXT = _build_help_text()
+    footer_text = (
+        f"Max {MAX_INPUT_LEN} chars · "
+        f"{int(BUDGET_SECONDS * 1000)} ms budget · "
+        "/calc-config for precision & angle"
+    )
+
+    return {
+        "description": description,
+        "fields": fields,
+        "footer_text": footer_text,
+    }
 
 
 def build_help_embed() -> Dict[str, Any]:
+    payload = _build_help_payload()
     embed = {
         "title": "Disculate — quick reference",
-        "description": clip(HELP_TEXT, EMBED_DESC_MAX),
+        "description": clip(payload["description"], EMBED_DESC_MAX),
         "color": COLOR_INFO,
-        "footer": {"text": "Run /calc-config to change precision or angle mode."},
+        "fields": payload["fields"],
+        "footer": {"text": clip(payload["footer_text"], EMBED_FOOTER_MAX)},
     }
     return enforce_total_cap(embed)

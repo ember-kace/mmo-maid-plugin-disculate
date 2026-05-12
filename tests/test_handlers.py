@@ -28,7 +28,7 @@ def test_calc_happy_path_public():
     assert resp.get("ephemeral") is False
     desc = _embed(resp)["description"]
     assert "2+2" in desc
-    assert "**4**" in desc
+    assert "= 4" in desc
     metric_names = {m["name"] for m in ctx.metrics.recorded}
     assert "calc_eval" in metric_names
     assert "calc_latency_ms" in metric_names
@@ -78,7 +78,7 @@ def test_calc_uses_per_server_angle_mode():
     event = slash_event("calc", options=[opt("expression", "sin(90)")])
     plugin_module.cmd_calc(ctx, event)
     desc = _embed(_first_response(ctx))["description"]
-    assert "**1**" in desc
+    assert "= 1" in desc
 
 
 def test_calc_uses_per_server_precision():
@@ -153,9 +153,33 @@ def test_calc_help_returns_help_embed():
     assert resp["ephemeral"] is True
     embed = _embed(resp)
     assert "Disculate" in embed["title"]
-    desc = embed["description"]
+    # Tokens may live in the description OR in any field value after the
+    # v0.2.3 field-grid refactor. Search the union.
+    body = embed.get("description", "") + " ".join(
+        f.get("value", "") for f in embed.get("fields", [])
+    ) + " " + (embed.get("footer") or {}).get("text", "")
     for token in ("pi", "sqrt", "/calc-config"):
-        assert token in desc
+        assert token in body, f"{token} not surfaced in help embed"
+
+
+def test_help_embed_uses_field_grid():
+    """Lock the field-grid layout (v0.2.3) against future regression."""
+    from lib.functions import CATEGORY_ORDER
+    ctx = FakeCtx()
+    plugin_module.cmd_calc_help(ctx, slash_event("calc-help"))
+    embed = _embed(_first_response(ctx))
+    field_names = {f["name"] for f in embed.get("fields", [])}
+    # Every function category appears as its own field.
+    for _, label in CATEGORY_ORDER:
+        assert label in field_names, f"{label} category missing as a field"
+    # Notes field is full-width (non-inline) — it's the operational
+    # caveats block.
+    notes_field = next((f for f in embed["fields"] if f["name"] == "Notes"), None)
+    assert notes_field is not None and notes_field.get("inline") is False
+    # Category fields are inline so Discord packs them as a grid.
+    for f in embed["fields"]:
+        if f["name"] != "Notes":
+            assert f.get("inline") is True, f"{f['name']} should be inline"
 
 
 def test_calc_user_id_unknown_uses_fallback_cooldown_key():
@@ -197,7 +221,7 @@ def test_calc_percent_evaluates():
     event = slash_event("calc", options=[opt("expression", "200 * 5%")])
     plugin_module.cmd_calc(ctx, event)
     desc = _embed(_first_response(ctx))["description"]
-    assert "**10**" in desc
+    assert "= 10" in desc
 
 
 def test_calc_footer_present_only_when_trig_used():
@@ -294,7 +318,7 @@ def test_calc_with_real_sdk_event_shape_evaluates_expression():
     plugin_module.cmd_calc(ctx, real_event)
     resp = ctx.interaction.responses[0]
     desc = resp["embeds"][0]["description"]
-    assert "**9**" in desc, f"got desc: {desc}"
+    assert "= 9" in desc, f"got desc: {desc}"
     # Cooldown key should use the real user_id, not the fallback "unknown".
     cd_keys = list(ctx.ephemeral.cooldowns.keys())
     assert any("627259696343941120" in k for k in cd_keys), cd_keys
@@ -317,4 +341,4 @@ def test_calc_works_when_ephemeral_raises():
     plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", "2+2")]))
     assert ctx.interaction.responses, "no response despite ephemeral failure"
     desc = _embed(_first_response(ctx))["description"]
-    assert "**4**" in desc
+    assert "= 4" in desc

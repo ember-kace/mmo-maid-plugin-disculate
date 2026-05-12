@@ -4,6 +4,23 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.2.3] — 2026-05-12
+
+Visual polish for `/calc` result and `/calc-help` embeds. Zero behavior change; same math, same SDK contract.
+
+### Changed
+- **Result embed (`/calc`)**: redesigned with the "header hero" layout. The expression sits small and monospaced on top, the result drops below as a large `##` markdown header. Discord renders embed-internal `##` as a true heading (post-2023 markdown), so the answer now visually dominates the card instead of competing with the expression for emphasis.
+- **Help embed (`/calc-help`)**: refactored from a single dense description blob into a Discord-native field grid. Each function category (Basic, Roots / Exp / Log, Trig, Hyperbolic) is now its own inline embed field; the "Notes" caveats block is a full-width field below. Operators / Percent / Constants stay in the description as a compact intro. Footer condenses the limits and `/calc-config` pointer onto one line.
+- **Error embed**: dropped the redundant `"Calc error"` title. The red color accent and `reason: <code>` footer already establish the embed as an error; the hint becomes the primary content. Also dropped the `"Input:"` label — the backticked expression speaks for itself.
+
+### Added
+- `tests/test_handlers.py:test_help_embed_uses_field_grid` — locks the new field-grid layout so future drift is caught (every category appears as an inline field; Notes is non-inline; categories carry the inline flag).
+
+### Notes
+- `_build_help_text()` (returned a single string) became `_build_help_payload()` (returns `{description, fields, footer_text}` so the embed assembler stays a thin formatter). All content still derives from `FUNCTIONS` + `CONSTANTS` + canonical limits (`parser.MAX_INPUT_LEN`, `walker.BUDGET_SECONDS`) — adding a math function still auto-populates the help.
+- Color discipline unchanged: gold for success (result, config-updated), red for errors, slate for neutral notices (help, cooldown, config-current).
+- Test count 196 → 197.
+
 ## [0.2.2] — 2026-05-12
 
 Hotfix. Every `/calc` invocation in production returned "Expression is empty" — production logs revealed the SDK delivers slash command arguments at `event["command_options"]`, not `event["options"]` (the latter is what the SDK doc's example showed, and what we believed). `_user_id` was likewise reading `event["member"]["user"]["id"]` instead of the actual top-level `event["user_id"]`, so every cooldown was bucketed under `cd:calc:unknown`.

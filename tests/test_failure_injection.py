@@ -22,7 +22,7 @@ def test_kv_get_raises_during_config_load_falls_back_to_defaults():
     # Should still respond — defaults kick in
     assert ctx.interaction.responses
     desc = ctx.interaction.responses[0]["embeds"][0]["description"]
-    assert "**2**" in desc
+    assert "= 2" in desc
 
 
 def test_kv_set_raises_during_config_apply_returns_internal():
@@ -55,7 +55,7 @@ def test_cooldown_check_raises_proceeds_with_calc():
     # Falls open to allow the eval rather than blocking on infra failure
     assert ctx.interaction.responses
     desc = ctx.interaction.responses[0]["embeds"][0]["description"]
-    assert "**2**" in desc
+    assert "= 2" in desc
 
 
 def test_cooldown_set_raises_does_not_block_response():

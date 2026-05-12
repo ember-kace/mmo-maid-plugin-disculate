@@ -522,6 +522,35 @@ def test_calc_div_by_zero_diagnostic_names_operator():
     assert "`/`" in desc
 
 
+@pytest.mark.parametrize("bad_payload", [
+    {"data": "garbage"},
+    {"data": [1, 2, 3]},
+    {"data": 42},
+    {"command_options": {"not": "a list"}},
+    {"command_options": None, "options": None, "data": None},
+    {"data": {"options": "not a list either"}},
+    {},  # no options slot at all
+])
+def test_calc_handler_survives_malformed_event_shape(bad_payload):
+    """V1-02 / V4-03: malformed event payloads must not raise out of the
+    handler. Pre-v0.2.9 a non-dict event["data"] would AttributeError
+    out of _options into the SDK runtime."""
+    ctx = FakeCtx()
+    # Attach the minimum bits the handler needs beyond options.
+    event = {
+        "type": "interaction_create",
+        "interaction_type": 2,
+        "command_name": "calc",
+        "user_id": "test",
+        "permissions": "0",
+    }
+    event.update(bad_payload)
+    plugin_module.cmd_calc(ctx, event)
+    # Should respond gracefully (likely EMPTY reason) rather than crash.
+    embed = _embed(_first_response(ctx))
+    assert "reason: " in embed["footer"]["text"]
+
+
 def test_calc_works_when_ephemeral_raises():
     # T5-05: ephemeral subsystem failures must not block evaluation.
     # The plugin falls open (cooldown ineffective) but still answers.

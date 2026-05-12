@@ -81,17 +81,32 @@ def _is_admin(event: Dict[str, Any]) -> bool:
 
 
 def _options(event: Dict[str, Any]) -> Dict[str, Any]:
-    # Observed SDK shape (v0.5.0): event["command_options"] is the flat
-    # list of {"name", "value"} dicts for slash commands. The SDK doc's
-    # example used "options" — kept as a fallback, plus the raw
-    # Discord-style data.options shape for extra defensiveness.
+    """Extract slash-command args from the SDK event payload.
+
+    Observed shape (v0.5.0): event["command_options"] is a flat list of
+    {"name", "value"} dicts. SDK doc's example used "options", and the
+    raw Discord shape nests under "data.options" — we check all three,
+    but treat each slot as a list-of-dicts only when it actually is one.
+    Malformed shapes (strings, numbers, dicts in the wrong slot) fail
+    closed: empty dict, no exception. Pre-v0.2.9 the data fallback
+    called `.get` on whatever was at event["data"] and raised
+    AttributeError when that wasn't a dict.
+    """
     out: Dict[str, Any] = {}
-    raw = (
-        event.get("command_options")
-        or event.get("options")
-        or (event.get("data") or {}).get("options")
-        or []
-    )
+    raw: Any = None
+    for slot in ("command_options", "options"):
+        candidate = event.get(slot)
+        if isinstance(candidate, list):
+            raw = candidate
+            break
+    if raw is None:
+        data = event.get("data")
+        if isinstance(data, dict):
+            candidate = data.get("options")
+            if isinstance(candidate, list):
+                raw = candidate
+    if raw is None:
+        return out
     for opt in raw:
         if isinstance(opt, dict) and "name" in opt:
             out[opt["name"]] = opt.get("value")

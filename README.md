@@ -96,7 +96,7 @@ disculate/
 ├── plugin.py                ← handler entry points (must end with plugin.run())
 ├── lib/
 │   ├── parser.py            ← cleaning, percent preprocessing, ast.parse + allowlist walker
-│   ├── evaluator.py         ← AST walk, DoS guards, wall-clock budget
+│   ├── walker.py            ← AST walk, DoS guards, wall-clock budget
 │   ├── functions.py         ← FunctionSpec registry (one entry per math function)
 │   ├── format.py            ← result formatting (precision, scientific, int preservation)
 │   ├── config.py            ← per-server KV config + schema versioning

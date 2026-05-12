@@ -1,15 +1,16 @@
 # AUDIT-REPORT.md — Disculate
 
-**Verdict:** PASS for v0.2.0 ship (post-tailored-audit).
+**Verdict:** PASS for v0.2.1 ship (post-marketplace-rejection refactor).
 
 | Round | Verdict | Findings | Action |
 |---|---|---|---|
 | R1 — Correctness (v0.1.0) | PASS | 0 BLOCKER, 0 MAJOR, 2 MINOR (fixed) | Both fixed in-tree before v0.1.0. |
 | R2 — Tailored, generic (v0.1.0) | PASS | 0 BLOCKER, 0 MAJOR, 3 MINOR (deferred or accepted) | All scope/design decisions documented. |
 | R3 — Deep (v0.1.0) | PASS | 0 BLOCKER, 0 MAJOR, 5 INFO | Logged into SDK-ASSUMPTIONS.md and RUNBOOK.md. |
-| **T — Tailored, math-shape-specific (v0.2.0)** | **PASS** | **0 BLOCKER, 3 MAJOR (fixed), 6 MINOR (mostly fixed), 4 NIT (mostly fixed), 3 ENHANCE (deferred)** | All MAJORs and most MINORs fixed; ENHANCE items in backlog. |
+| T — Tailored, math-shape-specific (v0.2.0) | PASS | 0 BLOCKER, 3 MAJOR (fixed), 6 MINOR (mostly fixed), 4 NIT (mostly fixed), 3 ENHANCE (deferred) | All MAJORs and most MINORs fixed; ENHANCE items in backlog. |
+| **U — Marketplace-validator escape (v0.2.1)** | **PASS** | **1 BLOCKER (fixed) + new audit gate** | File + identifier rename + substring-based local gate to mirror the marketplace's scanner. |
 
-Audit gates: all 7 green (`py tools/run_audit.py`). Tests: 192/192 green (up from 175).
+Audit gates: all 8 green (`py tools/run_audit.py`). Tests: 195/195 green (unchanged from v0.2.0).
 
 ---
 
@@ -104,9 +105,9 @@ Audit gates: all 7 green (`py tools/run_audit.py`). Tests: 192/192 green (up fro
 
 ### Finding R3-05 — Wall-clock budget granularity
 **Severity:** INFO (accepted)
-**Probe:** Time `evaluate_safe` on the deepest legal expression (32 binops, 200 nodes max). p99 < 1ms on a developer laptop.
+**Probe:** Time `run_safe` on the deepest legal expression (32 binops, 200 nodes max). p99 < 1ms on a developer laptop.
 **Decision:** The budget check fires before each node visit, so a single very-slow node could run uncapped. All our allowed primitives (`math.*`, arithmetic) are O(1), so this never matters in practice. Documented for future maintainers.
-**Files:** `lib/evaluator.py:38-46`
+**Files:** `lib/walker.py:38-46`
 
 ### R3 sweep also verified
 
@@ -127,9 +128,9 @@ Post-launch audit explicitly shaped to Disculate's actual attack surface — the
 ### T1-01 / T1-02 — NaN/inf leakage (MAJOR)
 **Probe:** `/calc 1e1000` returned `+inf`. `/calc 1e308 + 1e308` produced `NaN`.
 **Root cause:** Two-fold. (1) `ast.parse("1e1000")` produces `Constant(value=inf)` — the validator's `isinstance(v, (int, float))` check accepted it. (2) Only `Pow` checked its result for finite; every other binop returned raw float, propagating nan/inf downstream.
-**Fix:** `parser._validate` rejects non-finite float literals with `OVERFLOW`. `evaluator._eval` centralized post-op finite check; the Pow-specific check is removed for a single source of truth.
+**Fix:** `parser._validate` rejects non-finite float literals with `OVERFLOW`. `walker._walk` centralized post-op finite check; the Pow-specific check is removed for a single source of truth.
 **Tests:** `test_inf_literal_rejected_at_parse_time`, `test_inf_nan_results_caught_post_binop`.
-**Files:** [lib/parser.py:114-117](lib/parser.py#L114-L117), [lib/evaluator.py:36-46](lib/evaluator.py#L36-L46)
+**Files:** [lib/parser.py:114-117](lib/parser.py#L114-L117), [lib/walker.py:36-46](lib/walker.py#L36-L46)
 **Status:** Fixed.
 
 ### T1-03 — `mod()` sign inconsistency across int/float (MAJOR)
@@ -192,7 +193,7 @@ Post-launch audit explicitly shaped to Disculate's actual attack surface — the
 
 ### T3-05 / T3-06 — Help text auto-generates from registry + canonical limits (MINOR)
 **Probe:** HELP_TEXT manually listed 24 functions and the 120-char input cap. Adding a function or changing the cap would silently drift.
-**Fix:** `_build_help_text()` derives the function list from `FUNCTIONS` and the limits from `parser.MAX_INPUT_LEN` and `evaluator.EVAL_BUDGET_SECONDS`. Categories are grouped via `CATEGORY_ORDER`.
+**Fix:** `_build_help_text()` derives the function list from `FUNCTIONS` and the limits from `parser.MAX_INPUT_LEN` and `walker.BUDGET_SECONDS`. Categories are grouped via `CATEGORY_ORDER`.
 **Files:** [lib/embed.py:120-150](lib/embed.py#L120-L150)
 **Status:** Fixed.
 
@@ -210,7 +211,7 @@ Post-launch audit explicitly shaped to Disculate's actual attack surface — the
 **Status:** Fixed.
 
 ### T6-02 — Latency-metric docstring clarified (NIT)
-**Fix:** Docstring on `_record_eval` notes that elapsed covers the full handler, not just the evaluator.
+**Fix:** Docstring on `_record_metric` (renamed from `_record_eval` in v0.2.1) notes that elapsed covers the full handler, not just the walker.
 **Files:** [plugin.py:62-71](plugin.py#L62-L71)
 **Status:** Fixed.
 
@@ -223,9 +224,40 @@ Post-launch audit explicitly shaped to Disculate's actual attack surface — the
 
 ### Testing gaps (T5-*) — all fixed
 - `(-2)**0.5` added to `test_domain_errors` parametrize.
-- `1e1000` and post-binop nan/inf cases added to `test_evaluator.py`.
+- `1e1000` and post-binop nan/inf cases added to `tests/test_walker.py` (renamed from `test_evaluator.py` in v0.2.1).
 - `5 % 3` collision tests added to `test_parser.py` and `test_handlers.py`.
 - Format boundary at `1e-7` added to `test_format.py`.
 - Cooldown fallback when ephemeral raises added to `test_handlers.py`.
 
 Test count grew from 175 → 192.
+
+---
+
+## Round U — Marketplace-validator escape (v0.2.1)
+
+Caught at upload, not at audit. The MMO Maid platform validator rejected the bundle with:
+
+> `lib/evaluator.py: contains blocked pattern 'eval(' — this is not allowed in marketplace plugins`
+
+The validator uses **substring matching**, not Python parsing. Our `_eval(...)` recursive helper and `_record_eval(...)` metric helper both contained the literal `eval(` substring and tripped the check despite being custom identifiers, not calls to the dangerous builtin.
+
+### U1 — `eval(` substring escape (BLOCKER)
+
+**Probe:** Build the bundle and read any shipped file for the substring `eval(`. Pre-fix hits: `lib/evaluator.py` (6×, function def + recursive calls), `plugin.py` (6×, `_record_eval` def + calls), `lib/parser.py` (1×, docstring mentioned `eval()`).
+
+**Why our local audit missed it:** [tools/run_audit.py:check_no_eval_compile_exec_ast](tools/run_audit.py) uses `ast.parse` + `ast.walk` to find calls where `node.func.id in {"eval", "exec", "compile"}`. That correctly didn't match our custom-named functions. The marketplace's substring check is strictly weaker (matches identifier prefixes) but is what we have to satisfy.
+
+**Fix:**
+1. Renamed `lib/evaluator.py` → [lib/walker.py](lib/walker.py).
+2. Renamed every `eval`-rooted identifier: `evaluate` → `run`, `_eval` → `_walk`, `evaluate_safe` → `run_safe`, `EvalError` → `WalkError`, `EVAL_BUDGET_SECONDS` → `BUDGET_SECONDS`.
+3. Renamed `plugin._record_eval` → `plugin._record_metric`. The metric **name** `"calc_eval"` (a string literal without trailing `(`) is unchanged so any future dashboard still finds it.
+4. Rewrote [lib/parser.py](lib/parser.py) module docstring to describe the safety guarantee without using the literal substrings `eval()`/`exec()`/`compile()`.
+5. Renamed `tests/test_evaluator.py` → `tests/test_walker.py`, internal `_eval` test helper → `_run`, and `test_..._with_eval` → `test_..._with_calc`.
+
+**New audit gate:** [tools/run_audit.py:check_blocked_substrings](tools/run_audit.py). Substring-based scan over the bundle's `INCLUDED_FILES`, blocking `eval(`, `exec(`, and `__import__(`. Intentionally narrow — initially included `compile(`, `getattr(`, `globals(`, etc., but `compile(` false-positived on `re.compile(...)` and the marketplace clearly can't actually be blocking common stdlib idioms. If a future upload hits a different pattern, add it back here. The AST gate `check_no_eval_compile_exec_ast` stays in place for the broader set; the two gates are complementary.
+
+**Files:** [lib/walker.py](lib/walker.py), [plugin.py](plugin.py), [lib/embed.py](lib/embed.py), [lib/parser.py](lib/parser.py), [lib/functions.py](lib/functions.py), [tests/test_walker.py](tests/test_walker.py), [tests/test_failure_injection.py](tests/test_failure_injection.py), [tools/build_bundle.py](tools/build_bundle.py), [tools/run_audit.py](tools/run_audit.py)
+
+**Status:** Fixed. All 8 audit gates green, 195 tests green, zero `eval(`/`exec(`/`__import__(` substrings in any shipped file.
+
+**Lesson for future rounds:** When the local audit and the platform's validator use different matching strategies, the local audit is at best an under-approximation of what the platform will accept. Mirror the platform's strategy when possible — even if it's naive — so failures happen at audit time, not at upload.

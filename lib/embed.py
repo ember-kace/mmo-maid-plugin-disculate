@@ -15,9 +15,9 @@ import unicodedata
 from typing import Any, Dict, List
 
 from . import reasons as R
-from .evaluator import EVAL_BUDGET_SECONDS
 from .functions import CATEGORY_ORDER, CONSTANTS, FUNCTIONS
 from .parser import MAX_INPUT_LEN
+from .walker import BUDGET_SECONDS
 
 COLOR_OK = 0xC9A35A      # gold
 COLOR_ERROR = 0xCC4444   # red
@@ -197,7 +197,7 @@ def _build_help_text() -> str:
         "Modulo via `mod(a, b)`. `^` is not power — use `**`.",
         "Bitwise ops, factorial, variables, `inf`/`nan` literals, and comparisons are not supported.",
         f"Max expression length: {MAX_INPUT_LEN} characters. "
-        f"Evaluation budget: {int(EVAL_BUDGET_SECONDS * 1000)} ms.",
+        f"Evaluation budget: {int(BUDGET_SECONDS * 1000)} ms.",
     ]
     return "\n".join(lines)
 

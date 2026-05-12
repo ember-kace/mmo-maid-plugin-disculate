@@ -1,7 +1,7 @@
 {
   "id": "disculate",
   "name": "Disculate",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "In-Discord calculator. Arithmetic, percentages, common math functions, and constants — no leaving the channel.",
   "author": "Disculate",
   "tags": ["calculator", "math", "utility"],

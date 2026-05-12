@@ -15,9 +15,9 @@ from lib import config as cfg
 from lib import embed as eb
 from lib import logctx
 from lib import reasons as R
-from lib.evaluator import evaluate_safe
 from lib.format import format_result
 from lib.parser import parse, uses_trig
+from lib.walker import run_safe
 
 plugin = Plugin()
 
@@ -87,12 +87,12 @@ def _safe_respond(ctx: Context, **kwargs: Any) -> None:
         logctx.log_error(ctx, "respond failed", err=str(e))
 
 
-def _record_eval(ctx: Context, result_tag: str, started_at: float) -> None:
+def _record_metric(ctx: Context, result_tag: str, started_at: float) -> None:
     """Emit calc_eval + calc_latency_ms metrics.
 
     `started_at` is seeded at handler entry, so elapsed covers the full
-    handler — parse + config read + evaluate + format + respond — not
-    just the evaluator. The bucket tag (`<5`, `5-25`, ..., `>200`) gives
+    handler — parse + config read + walker + format + respond — not
+    just the walker. The bucket tag (`<5`, `5-25`, ..., `>200`) gives
     the resolution that matters; the raw value is a coarse aggregate.
     """
     elapsed_ms = (time.monotonic() - started_at) * 1000.0
@@ -155,7 +155,7 @@ def cmd_calc(ctx: Context, event: Dict[str, Any]):
             embeds=[eb.build_cooldown_embed(remaining)],
             ephemeral=True,
         )
-        _record_eval(ctx, R.COOLDOWN, started)
+        _record_metric(ctx, R.COOLDOWN, started)
         return
 
     tree, parse_reason = parse(raw_expression)
@@ -166,11 +166,11 @@ def cmd_calc(ctx: Context, event: Dict[str, Any]):
             ephemeral=True,
         )
         _set_cooldown(ctx, user_id)
-        _record_eval(ctx, parse_reason, started)
+        _record_metric(ctx, parse_reason, started)
         return
 
     config = cfg.get_config(ctx)
-    value, eval_reason = evaluate_safe(tree, angle_mode=config["angle_mode"])
+    value, eval_reason = run_safe(tree, angle_mode=config["angle_mode"])
     if eval_reason is not None:
         _safe_respond(
             ctx,
@@ -178,7 +178,7 @@ def cmd_calc(ctx: Context, event: Dict[str, Any]):
             ephemeral=True,
         )
         _set_cooldown(ctx, user_id)
-        _record_eval(ctx, eval_reason, started)
+        _record_metric(ctx, eval_reason, started)
         return
 
     try:
@@ -195,7 +195,7 @@ def cmd_calc(ctx: Context, event: Dict[str, Any]):
             ephemeral=True,
         )
         _set_cooldown(ctx, user_id)
-        _record_eval(ctx, R.INTERNAL, started)
+        _record_metric(ctx, R.INTERNAL, started)
         return
 
     _safe_respond(
@@ -209,7 +209,7 @@ def cmd_calc(ctx: Context, event: Dict[str, Any]):
         ephemeral=ephemeral,
     )
     _set_cooldown(ctx, user_id)
-    _record_eval(ctx, R.OK, started)
+    _record_metric(ctx, R.OK, started)
 
 
 def _record_config(ctx: Context, result: str, field: str = "none") -> None:

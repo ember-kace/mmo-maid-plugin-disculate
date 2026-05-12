@@ -3,14 +3,14 @@ import math
 import pytest
 
 from lib import reasons as R
-from lib.evaluator import evaluate_safe
 from lib.parser import parse
+from lib.walker import run_safe
 
 
-def _eval(expr, angle_mode="rad", budget=0.2):
+def _run(expr, angle_mode="rad", budget=0.2):
     tree, reason = parse(expr)
     assert reason is None, f"parse failed: {reason}"
-    return evaluate_safe(tree, angle_mode=angle_mode, budget_seconds=budget)
+    return run_safe(tree, angle_mode=angle_mode, budget_seconds=budget)
 
 
 @pytest.mark.parametrize("expr, expected", [
@@ -26,7 +26,7 @@ def _eval(expr, angle_mode="rad", budget=0.2):
     ("(1+2)*3", 9),
 ])
 def test_basic_arithmetic(expr, expected):
-    value, reason = _eval(expr)
+    value, reason = _run(expr)
     assert reason is None
     assert value == expected
 
@@ -37,7 +37,7 @@ def test_basic_arithmetic(expr, expected):
     ("tau", math.tau),
 ])
 def test_constants(expr, expected):
-    value, reason = _eval(expr)
+    value, reason = _run(expr)
     assert reason is None
     assert value == pytest.approx(expected)
 
@@ -59,57 +59,57 @@ def test_constants(expr, expected):
     ("pow(2, 10)", 1024),
 ])
 def test_functions(expr, expected):
-    value, reason = _eval(expr)
+    value, reason = _run(expr)
     assert reason is None
     assert value == pytest.approx(expected)
 
 
 def test_trig_default_radians():
-    value, reason = _eval("sin(0)")
+    value, reason = _run("sin(0)")
     assert reason is None
     assert value == pytest.approx(0.0)
-    value, reason = _eval("cos(pi)")
+    value, reason = _run("cos(pi)")
     assert reason is None
     assert value == pytest.approx(-1.0)
 
 
 def test_trig_degree_mode():
-    value, reason = _eval("sin(90)", angle_mode="deg")
+    value, reason = _run("sin(90)", angle_mode="deg")
     assert reason is None
     assert value == pytest.approx(1.0)
-    value, reason = _eval("cos(180)", angle_mode="deg")
+    value, reason = _run("cos(180)", angle_mode="deg")
     assert reason is None
     assert value == pytest.approx(-1.0)
 
 
 def test_inverse_trig_degree_mode():
-    value, reason = _eval("asin(1)", angle_mode="deg")
+    value, reason = _run("asin(1)", angle_mode="deg")
     assert reason is None
     assert value == pytest.approx(90.0)
-    value, reason = _eval("atan2(1, 1)", angle_mode="deg")
+    value, reason = _run("atan2(1, 1)", angle_mode="deg")
     assert reason is None
     assert value == pytest.approx(45.0)
 
 
 def test_percentage_via_preprocessing():
-    value, reason = _eval("50%")
+    value, reason = _run("50%")
     assert reason is None
     assert value == 0.5
-    value, reason = _eval("200 * 5%")
+    value, reason = _run("200 * 5%")
     assert reason is None
     assert value == 10.0
 
 
 def test_div_by_zero():
     for expr in ("1/0", "1.0/0", "1//0", "mod(1, 0)"):
-        value, reason = _eval(expr)
+        value, reason = _run(expr)
         assert value is None, expr
         assert reason == R.DIV_BY_ZERO, expr
 
 
 def test_domain_errors():
     for expr in ("sqrt(-1)", "log(-1)", "log(0)", "asin(2)", "acos(2)", "(-2)**0.5"):
-        value, reason = _eval(expr)
+        value, reason = _run(expr)
         assert value is None, expr
         assert reason == R.DOMAIN_ERROR, f"{expr} -> {reason}"
 
@@ -118,13 +118,13 @@ def test_inf_nan_results_caught_post_binop():
     # T1-02: result-side nan/inf must be caught regardless of the operator
     # that produced them. With T1-01 rejecting inf/nan literals upfront,
     # these cases are now reached only via intermediate float arithmetic.
-    # The centralized check in _eval converts them to typed reasons.
+    # The centralized check in walker._walk converts them to typed reasons.
     for expr, expected_reason in [
         ("1e308 + 1e308", R.OVERFLOW),     # finite + finite -> inf
         ("1e308 * 10",    R.OVERFLOW),
         ("0 * (1e308 * 10)", R.OVERFLOW),  # would be 0 * inf = nan in raw float; caught upstream
     ]:
-        value, reason = _eval(expr)
+        value, reason = _run(expr)
         assert value is None, f"{expr} produced {value}"
         # OVERFLOW or DOMAIN_ERROR both indicate the centralized guard fired.
         assert reason in (R.OVERFLOW, R.DOMAIN_ERROR), f"{expr} -> {reason}"
@@ -139,37 +139,37 @@ def test_inf_literal_rejected_at_parse_time():
     # Also ensure -inf and 1e500 are rejected
     for expr in ("1e500", "-1e1000", "1e308 ** 2"):
         tree, reason = parse(expr)
-        # Either rejected at parse (literal overflow) or at eval (binop overflow)
+        # Either rejected at parse (literal overflow) or at walk (binop overflow)
         if tree is None:
             assert reason in (R.OVERFLOW, R.PARSE_ERROR), f"{expr} -> {reason}"
         else:
-            _, eval_reason = evaluate_safe(tree)
-            assert eval_reason in (R.OVERFLOW, R.DOMAIN_ERROR), f"{expr} -> {eval_reason}"
+            _, walk_reason = run_safe(tree)
+            assert walk_reason in (R.OVERFLOW, R.DOMAIN_ERROR), f"{expr} -> {walk_reason}"
 
 
 def test_pow_guard_huge_int_exp_routes_through_float():
     # 2**1000000 as bignum would eat memory; our guard routes to math.pow,
     # which overflows cleanly to OverflowError -> OVERFLOW.
-    value, reason = _eval("2**1000000")
+    value, reason = _run("2**1000000")
     assert value is None
     assert reason == R.OVERFLOW
 
 
 def test_pow_guard_negative_exp_int_routes_through_float():
-    value, reason = _eval("2**-3")
+    value, reason = _run("2**-3")
     assert reason is None
     assert value == pytest.approx(0.125)
 
 
 def test_pow_small_ints_preserved():
-    value, reason = _eval("2**10")
+    value, reason = _run("2**10")
     assert reason is None
     assert value == 1024
     assert isinstance(value, int)
 
 
 def test_pow_huge_base_routes_through_float():
-    value, reason = _eval("10000000**2")
+    value, reason = _run("10000000**2")
     # base > 1_000_000 forces float route
     assert reason is None
     assert value == pytest.approx(1e14)
@@ -180,34 +180,34 @@ def test_timeout_trips_when_budget_tiny():
     # check runs at every node visit; with a negative budget the very first
     # call to check() should raise TIMEOUT.
     tree, _ = parse("1+1+1+1+1")
-    value, reason = evaluate_safe(tree, budget_seconds=-1.0)
+    value, reason = run_safe(tree, budget_seconds=-1.0)
     assert value is None
     assert reason == R.TIMEOUT
 
 
-def test_evaluator_returns_internal_on_unknown_error(monkeypatch):
-    from lib import evaluator
+def test_walker_returns_internal_on_unknown_error(monkeypatch):
+    from lib import walker
     tree, _ = parse("1+1")
 
     def boom(*args, **kwargs):
         raise RuntimeError("synthetic")
 
-    monkeypatch.setattr(evaluator, "_eval", boom)
-    value, reason = evaluator.evaluate_safe(tree)
+    monkeypatch.setattr(walker, "_walk", boom)
+    value, reason = walker.run_safe(tree)
     assert value is None
     assert reason == R.INTERNAL
 
 
-def test_nested_calls_evaluate():
-    value, reason = _eval("sqrt(abs(-16))")
+def test_nested_calls_run():
+    value, reason = _run("sqrt(abs(-16))")
     assert reason is None
     assert value == 4.0
 
 
 def test_unary_combinations():
-    value, reason = _eval("--5")
+    value, reason = _run("--5")
     assert reason is None
     assert value == 5
-    value, reason = _eval("-+-5")
+    value, reason = _run("-+-5")
     assert reason is None
     assert value == 5

@@ -79,7 +79,7 @@ Design decisions and the alternatives they beat. Each section names the call, th
 - 32-deep AST (parser.MAX_DEPTH)
 - 200-node AST (parser.MAX_NODES)
 - `**` operand guard (functions._safe_pow): int base > 1M or int exp > 64 → math.pow → float overflow → typed reason
-- 200ms wall-clock budget (evaluator.EVAL_BUDGET_SECONDS)
+- 200ms wall-clock budget (walker.BUDGET_SECONDS)
 
 **Alternatives rejected:**
 

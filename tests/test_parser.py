@@ -135,11 +135,11 @@ def test_percent_before_minus_rewrites_as_percent_not_modulo():
     # and `5%` is rewritten to `(5/100)`. Result: `(5/100) - 3 = -2.95`.
     # This is the right user-intent inference: `5% - 3` is "5 percent
     # minus three", not modulo. Lock the behavior with a test.
-    from lib.evaluator import evaluate_safe
+    from lib.walker import run_safe
     tree, reason = parser.parse("5%-3")
     assert tree is not None, reason
-    value, eval_reason = evaluate_safe(tree)
-    assert eval_reason is None
+    value, walk_reason = run_safe(tree)
+    assert walk_reason is None
     assert value == pytest.approx(-2.95)
 
 

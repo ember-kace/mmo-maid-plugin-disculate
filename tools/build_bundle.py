@@ -25,12 +25,12 @@ INCLUDED_FILES = [
     "lib/__init__.py",
     "lib/config.py",
     "lib/embed.py",
-    "lib/evaluator.py",
     "lib/format.py",
     "lib/functions.py",
     "lib/logctx.py",
     "lib/parser.py",
     "lib/reasons.py",
+    "lib/walker.py",
 ]
 
 

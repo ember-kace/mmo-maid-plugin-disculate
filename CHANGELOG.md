@@ -4,6 +4,26 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.2.1] — 2026-05-11
+
+Refactor to satisfy the MMO Maid marketplace validator's substring-based pattern scanner. Zero behavior change for users; same 195-test suite passes; bundle size effectively unchanged.
+
+The marketplace rejected v0.2.0 with `lib/evaluator.py: contains blocked pattern 'eval(' — this is not allowed in marketplace plugins`. Root cause: our recursive `_eval(...)` walker function and the `_record_eval(...)` metric helper both contained the literal substring `eval(`. The platform's validator does substring matching, not AST parsing, so it didn't distinguish our custom-named function from the dangerous builtin. Our local audit gate uses AST parsing and correctly never matched our identifiers — which is why the issue surfaced at upload rather than at audit.
+
+### Changed
+- Renamed `lib/evaluator.py` → `lib/walker.py` and every `eval`-rooted identifier inside it: `evaluate` → `run`, `_eval` → `_walk`, `evaluate_safe` → `run_safe`, `EvalError` → `WalkError`, `EVAL_BUDGET_SECONDS` → `BUDGET_SECONDS`.
+- Renamed `plugin._record_eval` → `plugin._record_metric`. The metric **name** `"calc_eval"` is unchanged — it's a string literal without trailing `(`, so it doesn't trip the scanner, and keeping it preserves any downstream dashboard wiring.
+- Rewrote `lib/parser.py` module docstring to describe the safety guarantee without using the literal substrings `eval()`/`exec()`/`compile()`.
+- Renamed `tests/test_evaluator.py` → `tests/test_walker.py`; the test-only `_eval` helper → `_run`; `test_cooldown_check_raises_proceeds_with_eval` → `test_cooldown_check_raises_proceeds_with_calc`.
+- `manifest.json` version bumped 0.2.0 → 0.2.1.
+
+### Added
+- `tools/run_audit.py:check_blocked_substrings` gate — substring scan over the bundle's `INCLUDED_FILES`, blocking `eval(`, `exec(`, and `__import__(`. Initially included `compile(`/`getattr(`/`globals(`/etc., but `compile(` false-positived on the ubiquitous `re.compile(...)` idiom; trimmed the list to the genuinely dangerous primitives that have no common idiomatic safe use. Reintroduction now fails locally via `py tools/run_audit.py` instead of at upload.
+- The pre-existing AST-based gate is renamed `check_no_eval_compile_exec_ast` (was `check_no_eval_compile_exec`) and remains in place as a more-precise companion check. The two gates are complementary: the substring gate mirrors the marketplace; the AST gate catches calls the marketplace might miss.
+
+### Lesson recorded for future audits
+When the local audit and the platform's validator use different matching strategies, the local audit is at best an under-approximation of what the platform will accept. Mirror the platform's strategy when possible.
+
 ## [0.2.0] — 2026-05-11
 
 Post-launch tailored audit fixes. No KV schema change; existing config entries continue to work.

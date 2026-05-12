@@ -1,12 +1,13 @@
 """Input cleaning, percent preprocessing, parse + node allowlist validation.
 
-The parse stage uses stdlib ast.parse(mode='eval'). Doing so does NOT
-execute user input — ast.parse builds a syntax tree. The evaluator
-(evaluator.py) walks that tree manually. eval(), exec(), and compile()
-are never called on user-supplied data.
+The parse stage uses stdlib ast.parse to build a syntax tree from user
+input without executing it. The walker module (walker.py) walks that
+tree by hand. Python's built-in execution primitives are never invoked
+on user-supplied data — see ARCHITECTURE.md section A for why we don't
+use the obvious built-ins even on a validated AST.
 
-Validation runs before evaluation so depth/count caps and the node
-allowlist trip without burning the evaluator's wall-clock budget.
+Validation runs before the walk so depth/count caps and the node
+allowlist trip without burning the walker's wall-clock budget.
 """
 
 import ast

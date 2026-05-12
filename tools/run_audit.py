@@ -96,7 +96,11 @@ def _attribute_dotted(node):
     return ".".join(reversed(parts))
 
 
-def check_no_eval_compile_exec():
+def check_no_eval_compile_exec_ast():
+    """AST-based scan: rejects calls to the dangerous Python builtins
+    even if the call is on a non-bare name (e.g. via locals(), getattr).
+    Mirrors the spirit of the marketplace's check but is precise enough
+    to ignore identifiers that happen to share a prefix."""
     bad = []
     for path in _shipped_python_files():
         with open(path, "r", encoding="utf-8") as f:
@@ -108,6 +112,55 @@ def check_no_eval_compile_exec():
                     bad.append(f"{path}:{node.lineno}: call to {node.func.id}()")
     if bad:
         raise AuditError("eval/exec/compile usage:\n  " + "\n  ".join(bad))
+
+
+# Marketplace's substring scanner. Mirrors the (apparently naive) check
+# that rejected our `_eval(...)` calls. Confirmed-blocked: `eval(`.
+# Defensively also blocked: `exec(` (analogous dangerous primitive) and
+# `__import__(` (sandbox-escape vector with no idiomatic safe use).
+#
+# Intentionally NOT in the substring list:
+#   - `compile(` — would false-positive on `re.compile(...)`, which is
+#     ubiquitous and safe. The AST gate still catches a bare `compile()`
+#     call.
+#   - `getattr(`, `setattr(`, `globals(`, `locals(`, `vars(` — common
+#     stdlib idioms; substring matching them would break too much for
+#     too little gain. If the marketplace ends up rejecting one of these
+#     in practice, add it back here.
+_BLOCKED_SUBSTRINGS = (
+    "eval(",
+    "exec(",
+    "__import__(",
+)
+
+
+def check_blocked_substrings():
+    """Substring scan across every file in the bundle allowlist.
+
+    The marketplace appears to use a naive substring match (it flagged
+    our custom `_eval(...)` function as if it were a call to the
+    builtin). This gate runs the same scan locally so we catch the
+    issue at audit time, not upload time. Scope mirrors the bundle —
+    tests/ and tools/ are not scanned (they don't ship).
+    """
+    # Import lazily so a broken build_bundle import doesn't take down
+    # the rest of the audit.
+    from build_bundle import INCLUDED_FILES
+
+    bad = []
+    for rel in INCLUDED_FILES:
+        path = os.path.join(ROOT, rel)
+        if not os.path.isfile(path):
+            continue
+        with open(path, "r", encoding="utf-8") as f:
+            for lineno, line in enumerate(f, 1):
+                for needle in _BLOCKED_SUBSTRINGS:
+                    if needle in line:
+                        bad.append(f"{rel}:{lineno}: contains {needle!r}")
+    if bad:
+        raise AuditError(
+            "marketplace-blocked substrings present:\n  " + "\n  ".join(bad)
+        )
 
 
 def check_todo_markers():
@@ -194,7 +247,8 @@ def check_bundle():
 GATES = [
     ("manifest", check_manifest),
     ("imports", check_imports),
-    ("no_eval", check_no_eval_compile_exec),
+    ("blocked_substrings", check_blocked_substrings),
+    ("no_eval_ast", check_no_eval_compile_exec_ast),
     ("todo_markers", check_todo_markers),
     ("plugin_run", check_plugin_run_called),
     ("pytest", check_pytest),
@@ -219,4 +273,5 @@ def main():
 
 if __name__ == "__main__":
     sys.path.insert(0, ROOT)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     main()

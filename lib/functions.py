@@ -1,4 +1,4 @@
-"""Function and constant allowlist for the evaluator.
+"""Function and constant allowlist for the walker.
 
 Everything is driven from FUNCTIONS — one list of FunctionSpec records.
 Adding a new function = one new entry. HELP_TEXT (in lib/embed.py) is

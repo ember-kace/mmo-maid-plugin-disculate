@@ -43,7 +43,7 @@ def test_kv_set_raises_during_config_apply_returns_internal():
     assert "internal" in footer or "error" in ctx.interaction.responses[0]["embeds"][0]["title"].lower()
 
 
-def test_cooldown_check_raises_proceeds_with_eval():
+def test_cooldown_check_raises_proceeds_with_calc():
     ctx = FakeCtx()
 
     def boom(key):

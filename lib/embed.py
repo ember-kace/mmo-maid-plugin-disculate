@@ -275,6 +275,35 @@ def build_error_embed(
     return enforce_total_cap(embed)
 
 
+# Component custom_id prefix for the "Show help" button on error embeds.
+# The originating error reason is appended after the prefix so the
+# component handler can tag its metric with which failure drove the
+# click. Parse the reason from the END of the id (rsplit), never by
+# fixed index — the prefix itself contains `:`.
+HELP_BUTTON_CUSTOM_ID_PREFIX = "dch:help:"
+
+
+def help_button_row(reason: str) -> Dict[str, Any]:
+    """A raw Discord action-row dict with one secondary 'Show help' button.
+
+    Raw dicts (not SDK component classes) keep lib/ SDK-import-free; the
+    SDK's respond() passes dict components through unchanged. Discord
+    caps custom_id at 100 chars — reason codes are short, but clip anyway.
+    """
+    # Plain slice, not clip() — clip appends an ellipsis, and an id is
+    # routing data, not display text.
+    custom_id = f"{HELP_BUTTON_CUSTOM_ID_PREFIX}{reason}"[:100]
+    return {
+        "type": 1,  # ACTION_ROW
+        "components": [{
+            "type": 2,       # BUTTON
+            "style": 2,      # SECONDARY (grey) — it's an aside, not the action
+            "label": "Show help",
+            "custom_id": custom_id,
+        }],
+    }
+
+
 def build_cooldown_embed(seconds_remaining: int) -> Dict[str, Any]:
     s = max(1, int(seconds_remaining))
     embed = {
@@ -414,8 +443,27 @@ def _build_help_payload() -> Dict[str, Any]:
     }
 
 
-def build_help_embed() -> Dict[str, Any]:
+def build_help_embed(config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     payload = _build_help_payload()
+    fields = list(payload["fields"])
+    if config:
+        # Live per-server settings as the last full-width field. The
+        # static reference above teaches syntax; this line teaches what
+        # THIS server is configured to do right now and where to change
+        # it — the #1 trig confusion ("why is sin(90) not 1?") is an
+        # angle-mode discovery problem.
+        angle = "degrees" if config.get("angle_mode") == "deg" else "radians"
+        settings_value = (
+            f"Precision **{config.get('precision')}** · "
+            f"Angle **{angle}** · "
+            f"Scientific notation at **10^{config.get('scientific_threshold')}** "
+            "— adjust with `/calc-config` (admin)."
+        )
+        fields.append({
+            "name": "Server settings",
+            "value": clip(settings_value, EMBED_FIELD_VALUE_MAX),
+            "inline": False,
+        })
     embed = {
         "title": "Disculate",
         # v0.2.11: title is no longer a hyperlink. The platform
@@ -427,7 +475,7 @@ def build_help_embed() -> Dict[str, Any]:
         "description": clip(payload["description"], EMBED_DESC_MAX),
         "color": COLOR_INFO,
         "thumbnail": _BRAND_THUMBNAIL,
-        "fields": payload["fields"],
+        "fields": fields,
         "footer": {"text": clip(payload["footer_text"], EMBED_FOOTER_MAX)},
     }
     return enforce_total_cap(embed)

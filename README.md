@@ -53,7 +53,7 @@ Built for the YourBot platform's sandboxed plugin runtime (`yourbot_sdk`; the pl
 | `((1+2)` | error: *Unclosed parenthesis. 1 more `(` than `)`. Add 1 `)` to balance the expression.* |
 | `sqrt(-1)` | error: *`sqrt` of a negative value isn't a real number. Try `sqrt(abs(x))` if you want the magnitude.* |
 
-Errors aren't generic. Disculate identifies the specific problem in your input — close-typo suggestions for unknown names and functions, paren-balance counts, function-specific domain explanations, operator-mistake hints. Every error embed shows what's wrong on top, how to fix it next, and a `reason: <code>` footer for tracking.
+Errors aren't generic. Disculate identifies the specific problem in your input — close-typo suggestions for unknown names and functions, paren-balance counts, function-specific domain explanations, operator-mistake hints. Every error embed shows what's wrong on top, how to fix it next, a `reason: <code>` footer for tracking, and a **Show help** button that opens the full syntax reference in one click.
 
 ## Configuration
 
@@ -83,7 +83,7 @@ See [AUDIT-REPORT.md](AUDIT-REPORT.md) for the full audit trail.
 # Dev deps (test runner + the SDK whose vendored validator the audit uses):
 py -m pip install -r requirements-dev.txt
 
-# Run the test suite (285 tests, ~0.2s)
+# Run the test suite (297 tests, ~0.2s)
 py -m pytest tests/ -q
 
 # Build the deterministic production bundle (build/disculate.zip)
@@ -116,8 +116,8 @@ disculate/
 │   ├── diagnostics.py       ← per-reason error explainer + did-you-mean
 │   ├── reasons.py           ← reason codes + user-facing hints
 │   └── logctx.py            ← request_id ContextVar for log correlation
-├── tests/                   ← 285 tests: smoke, unit, handler, failure-injection, adversarial,
-│                              diagnostics, bundle/platform contract, drift guards
+├── tests/                   ← 297 tests: smoke, unit, handler, failure-injection, adversarial,
+│                              diagnostics, bundle/platform contract, drift guards, components
 ├── tools/
 │   ├── build_bundle.py      ← deterministic zip with allowlist guard
 │   ├── run_audit.py         ← 9 audit gates (incl. marketplace-substring mirror)

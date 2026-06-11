@@ -7,7 +7,7 @@
 - **The SDK is `yourbot_sdk` (0.6.x).** Renamed from `mmo_maid_sdk` in 0.6.0; the old name is a deprecation shim slated for removal. Production imports and the test stub both use `yourbot_sdk`; a stub-contract test blocks the legacy import from coming back.
 - Sandbox is `--network none`, empty env, 64 MB RAM, 0.25 vCPU. The plugin makes no outbound HTTP and writes nothing to disk.
 - Every external SDK call is wrapped: cooldown, metrics, respond, and KV all fail open. Look for `try/except` around `ctx.*` calls.
-- Three slash commands: `/calc`, `/calc-config` (admin), `/calc-help`. All replies set `allowed_mentions: {"parse": []}`.
+- Three slash commands: `/calc`, `/calc-config` (admin), `/calc-help`. All replies set `allowed_mentions: {"parse": []}`. One component: the "Show help" button on error embeds (`custom_id` prefix `dch:help:<reason>`, handled by `comp_show_help` via `on_component(prefix=...)` — parse the reason from the END of the id, the prefix contains `:`).
 
 ## What the plugin does
 
@@ -19,7 +19,7 @@ In-Discord calculator. `/calc expression:<text>` parses the expression with stdl
 |---|---|
 | `manifest.json` | Plugin id, version, capability declarations, slash command schemas. |
 | `__main__.py` | Platform-required entry point. One line: `import plugin`. Don't add logic here — tests and audit gates scan `plugin.py`. |
-| `plugin.py` | Handlers for `calc`, `calc-config`, `calc-help`, plus `on_ready`. Wires the SDK ctx into the library modules. |
+| `plugin.py` | Handlers for `calc`, `calc-config`, `calc-help`, the `dch:help:*` component, plus `on_ready`. Wires the SDK ctx into the library modules. |
 | `lib/reasons.py` | Reason code constants + `hint_for()` — every failure path returns one of these. |
 | `lib/logctx.py` | `request_id` ContextVar seeded at handler entry. `log_info` / `log_warn` / `log_error` carry it automatically. |
 | `lib/config.py` | KV-backed per-server config. Schema-versioned via `CONFIG_SCHEMA_V`; reader rejects mismatches. |
@@ -48,8 +48,8 @@ See `SDK-ASSUMPTIONS.md` for the full list — as of the 2026-06-10 source audit
 ## Tests and conventions
 
 - Run: `py -m pytest tests/ -q` from project root.
-- Current count: 285 tests, all green.
-- Layout: one `test_<module>.py` per `lib/` module, plus `test_handlers.py`, `test_stub_contract.py`, `test_failure_injection.py`, `test_adversarial.py`, `test_diagnostics.py`, `test_bundle_contract.py` (platform validator + capability parity), `test_drift.py` (registrations == manifest == README; options == handler reads).
+- Current count: 297 tests, all green.
+- Layout: one `test_<module>.py` per `lib/` module, plus `test_handlers.py`, `test_stub_contract.py`, `test_failure_injection.py`, `test_adversarial.py`, `test_diagnostics.py`, `test_bundle_contract.py` (platform validator + capability parity), `test_drift.py` (registrations == manifest == README; options == handler reads), `test_components.py` (help-button render + click round-trip).
 - `tests/conftest.py` stubs `yourbot_sdk` so the plugin imports without the real runtime, but first captures the REAL `yourbot_sdk._validation` submodule (stdlib-only, no runtime side effects) so platform-contract tests exercise the genuine validator. `test_stub_contract.py` locks the stub surface to what `plugin.py` actually uses and blocks the deprecated `mmo_maid_sdk` import.
 
 ## Build and bundle

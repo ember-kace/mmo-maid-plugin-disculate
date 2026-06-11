@@ -51,9 +51,17 @@ if not isinstance(sys.modules.get("yourbot_sdk"), types.ModuleType) or not hasat
                 return fn
             return deco
 
-        def on_component(self, custom_id):
+        def on_component(self, custom_id=None, *, prefix=None):
+            # Mirrors the real SDK signature (0.6.x): exactly one of
+            # custom_id= (exact match) or prefix= (startswith match).
+            if (custom_id is None) == (prefix is None):
+                raise ValueError(
+                    "on_component requires exactly one of custom_id= or prefix="
+                )
+
             def deco(fn):
-                self._handlers.setdefault("component", {})[custom_id] = fn
+                key = custom_id if custom_id is not None else prefix
+                self._handlers.setdefault("component", {})[key] = fn
                 return fn
             return deco
 

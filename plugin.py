@@ -8,6 +8,7 @@ ephemeral.cooldown_* shapes, kv.get None-on-miss — see
 SDK-ASSUMPTIONS.md for the inventory with source citations.
 """
 
+import math
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -156,7 +157,9 @@ def _check_cooldown(ctx: Context, user_id: str) -> Optional[int]:
         return None
     remaining = status.get("remaining_seconds", COOLDOWN_SECONDS)
     try:
-        return int(remaining)
+        # ceil, not trunc: 1.9s left must read "2 seconds", not "1" —
+        # truncation understates and the user retries too early.
+        return math.ceil(float(remaining))
     except (TypeError, ValueError):
         return COOLDOWN_SECONDS
 
@@ -203,6 +206,7 @@ def cmd_calc(ctx: Context, event: Dict[str, Any]):
                 parse_reason,
                 parse_detail,
             )],
+            components=[eb.help_button_row(parse_reason)],
             ephemeral=True,
         )
         _set_cooldown(ctx, user_id)
@@ -216,6 +220,7 @@ def cmd_calc(ctx: Context, event: Dict[str, Any]):
         _safe_respond(
             ctx,
             embeds=[eb.build_error_embed(raw_expression, eval_reason, eval_detail)],
+            components=[eb.help_button_row(eval_reason)],
             ephemeral=True,
         )
         _set_cooldown(ctx, user_id)
@@ -336,11 +341,37 @@ def cmd_calc_config(ctx: Context, event: Dict[str, Any]):
 @plugin.on_slash_command("calc-help")
 def cmd_calc_help(ctx: Context, event: Dict[str, Any]):
     logctx.new_request_id()
+    # Pass the live per-server config so help shows the effective
+    # precision / angle mode / scientific threshold (get_config falls
+    # back to defaults on any KV failure, so this can't block help).
     _safe_respond(
         ctx,
-        embeds=[eb.build_help_embed()],
+        embeds=[eb.build_help_embed(cfg.get_config(ctx))],
         ephemeral=True,
     )
+
+
+@plugin.on_component(prefix=eb.HELP_BUTTON_CUSTOM_ID_PREFIX)
+def comp_show_help(ctx: Context, event: Dict[str, Any]):
+    """'Show help' button on error embeds. The custom_id carries the
+    originating error reason after the prefix — parse it from the END
+    of the id (the prefix itself contains `:`)."""
+    logctx.new_request_id()
+    _safe_respond(
+        ctx,
+        embeds=[eb.build_help_embed(cfg.get_config(ctx))],
+        ephemeral=True,
+    )
+    cid = event.get("custom_id", "")
+    reason = cid.rsplit(":", 1)[-1] if isinstance(cid, str) else ""
+    try:
+        ctx.metrics.record(
+            "component_click",
+            value=1,
+            tags={"component": "help", "reason": reason or "unknown"},
+        )
+    except Exception as e:
+        logctx.log_warn(ctx, "metrics record failed", err=str(e))
 
 
 plugin.run()

@@ -168,3 +168,13 @@ def test_no_detail_safe_for_unknown_func():
     # Detail-less unknown_function — falls back to canonical, no None deref.
     what, how = diagnostics.explain("", R.UNSUPPORTED_FUNC, None)
     assert what == R.hint_for(R.UNSUPPORTED_FUNC)
+
+
+def test_not_admin_refusal_names_permission_and_next_action():
+    # v0.2.15: a refusal must say what's missing and what to do next,
+    # not just "no". It also must not imply the whole plugin is gated.
+    what, how = diagnostics.explain("", R.NOT_ADMIN, None)
+    assert "Manage Server" in what
+    assert how is not None
+    assert "/calc-config" in how
+    assert "/calc" in how  # points at what IS available to everyone

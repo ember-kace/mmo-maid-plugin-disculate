@@ -292,7 +292,21 @@ def _explain_unsupported_node(expression, detail):
     )
 
 
+def _explain_not_admin(expression, detail):
+    # A refusal should name the missing thing and the next action, not
+    # just restate "no". `/calc` and `/calc-help` stay available to
+    # everyone — say so, so the user doesn't walk away thinking the
+    # whole plugin is admin-gated.
+    return (
+        "Changing calculator settings needs the **Manage Server** or "
+        "**Administrator** permission.",
+        "Ask a server admin to run `/calc-config` — or keep using "
+        "`/calc` and `/calc-help`, which are open to everyone.",
+    )
+
+
 _HANDLERS = {
+    R.NOT_ADMIN: _explain_not_admin,
     R.UNSUPPORTED_FUNC: _explain_unknown_func,
     R.UNSUPPORTED_NAME: _explain_unknown_name,
     R.PARSE_ERROR: _explain_parse_error,

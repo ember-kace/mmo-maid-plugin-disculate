@@ -4,6 +4,47 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.2.15] — 2026-06-10
+
+UX pass: the first message component, a smarter `/calc-help`, honest
+cooldown numbers, and a refusal that teaches instead of blocking.
+
+### Added
+- **"Show help" button on error embeds.** Every parse/walk error now
+  carries a secondary-style button that opens the full syntax reference
+  ephemerally — one click from "what did I type wrong?" to the answer.
+  State is encoded in the `custom_id` (`dch:help:<reason>`), handled by
+  `comp_show_help` via `on_component(prefix=...)`; the reason is parsed
+  from the END of the id (the prefix contains `:`). Built as a raw
+  component dict in `lib/embed.py:help_button_row` so `lib/` stays
+  SDK-import-free. Clicks are instrumented (`component_click` metric,
+  tagged with the originating error reason — telling us which errors
+  actually confuse people), shielded in try/except after the respond.
+- **"Server settings" field on `/calc-help`.** Shows the live per-server
+  precision / angle mode / scientific threshold and points at
+  `/calc-config`. The #1 trig confusion ("why isn't `sin(90)` = 1?") is
+  an angle-mode discovery problem; now the answer is in the help card.
+  `build_help_embed(config=None)` — without config (static contexts) the
+  field is omitted.
+- `tests/test_components.py` — 11 tests: button render on both error
+  stages, click round-trip, empty-reason stale click, metric shielding,
+  prefix registration, cooldown ceil, settings field on/off.
+
+### Changed
+- **Cooldown remaining now rounds up.** `_check_cooldown` used `int()`
+  (truncation): 1.9s left rendered "Wait 1 second" and users retried too
+  early, eating another cooldown. `math.ceil` — 1.2s left says 2.
+- **`/calc-config` refusal explains itself.** New `diagnostics` handler
+  for NOT_ADMIN: names the missing permission (**Manage Server** /
+  **Administrator**), suggests asking an admin, and points out that
+  `/calc` + `/calc-help` remain open to everyone — a refusal should
+  never imply the whole plugin is gated.
+- conftest stub `on_component` now mirrors the real SDK signature
+  (exactly one of `custom_id=` / `prefix=`).
+
+### Test count
+285 → 297.
+
 ## [0.2.14] — 2026-06-10
 
 SDK 0.6.x alignment + drift cleanup, from the tune-up's update audit. The

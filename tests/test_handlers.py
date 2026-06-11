@@ -178,8 +178,9 @@ def test_help_embed_uses_field_grid():
         assert label in field_names, f"{label} category missing as a field"
     # v0.2.11 — Operators promoted from description-line to its own field.
     assert "Operators" in field_names
-    # Notes + Examples are full-width.
-    full_width_names = {"Notes", "Examples"}
+    # Notes + Examples are full-width; v0.2.15 adds the live
+    # "Server settings" line (also full-width) when config is passed.
+    full_width_names = {"Notes", "Examples", "Server settings"}
     for f in embed["fields"]:
         if f["name"] in full_width_names:
             assert f.get("inline") is False, f"{f['name']} should be full-width"

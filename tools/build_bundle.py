@@ -19,6 +19,7 @@ OUT_DIR = os.path.join(ROOT, "build")
 OUT_PATH = os.path.join(OUT_DIR, "disculate.zip")
 
 INCLUDED_FILES = [
+    "__main__.py",
     "manifest.json",
     "plugin.py",
     "requirements.txt",

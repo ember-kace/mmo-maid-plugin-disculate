@@ -4,6 +4,40 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.2.13] — 2026-06-10
+
+Artifact entry-point fix. The platform validator (vendored byte-for-byte in
+`yourbot_sdk._validation`, SDK 0.6.1) rejects any artifact without a
+top-level `__main__.py` (`missing_entry_point`). Our bundle shipped
+`plugin.py` as the entry file — accepted by the 0.5.x-era pipeline, rejected
+by today's. Caught by running the vendored validator against the built zip
+during the tune-up's regression baseline.
+
+### Added
+- **`__main__.py`** — a one-line shim (`import plugin`) at the bundle root.
+  plugin.py's bottom-line `plugin.run()` executes on import, so behavior is
+  identical; handlers stay in plugin.py where tests and audit gates scan them.
+- **`tools/validate_artifact.py`** — runs the SDK's vendored platform
+  validator against `build/disculate.zip`. This is the exact check the
+  platform runs on upload, runnable locally.
+- **`platform_validator` audit gate** (9th gate in `tools/run_audit.py`) —
+  the validator now runs on every audit, after the bundle gate. Errors block;
+  warnings print but pass, matching platform behavior.
+- **`tests/test_bundle_contract.py`** — 5 regression tests pinning the
+  entry point, a clean validator run (no errors AND no warnings), and
+  declared==detected capability parity on an in-memory zip built from the
+  same allowlist.
+
+### Changed
+- `tools/build_bundle.py:INCLUDED_FILES` gains `__main__.py` (14 files now).
+- `tools/run_audit.py:check_bundle` always rebuilds the zip instead of
+  reusing a stale artifact, so the validator gate checks current source.
+- `tools/run_audit.py:SHIPPED_FILES` includes `__main__.py` so the
+  forbidden-import/eval/TODO gates scan it too.
+
+### Test count
+276 → 281.
+
 ## [0.2.12] — 2026-05-12
 
 `/calc-help` slimmed back down. v0.2.11's Examples field and bulleted Notes pushed too much vertical content into the card — fine on a wide desktop monitor, crowded on mobile where Discord stacks every inline field vertically.

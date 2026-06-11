@@ -34,7 +34,7 @@ FORBIDDEN_ATTRS = {
 TODO_RE = re.compile(r"\b(TODO|FIXME|XXX)\b")
 
 SHIPPED_DIRS = ("lib",)
-SHIPPED_FILES = ("plugin.py",)
+SHIPPED_FILES = ("__main__.py", "plugin.py")
 
 MAX_BUNDLE_BYTES = 10 * 1024 * 1024
 MAX_BUNDLE_UNCOMPRESSED = 40 * 1024 * 1024
@@ -227,11 +227,10 @@ def check_pytest():
 
 
 def check_bundle():
-    bundle_path = os.path.join(ROOT, "build", "disculate.zip")
-    if not os.path.exists(bundle_path):
-        # Build it on the fly so audit is self-contained.
-        from tools import build_bundle  # type: ignore
-        bundle_path = build_bundle.build()
+    # Always rebuild so the audit (and the platform_validator gate after
+    # it) checks the current source, never a stale artifact.
+    from tools import build_bundle  # type: ignore
+    bundle_path = build_bundle.build()
     size = os.path.getsize(bundle_path)
     if size > MAX_BUNDLE_BYTES:
         raise AuditError(f"bundle {size} bytes exceeds {MAX_BUNDLE_BYTES}")
@@ -244,6 +243,33 @@ def check_bundle():
         raise AuditError(f"bundle uncompressed {uncompressed} > {MAX_BUNDLE_UNCOMPRESSED}")
 
 
+def check_platform_validator():
+    """Run the platform's vendored artifact validator against the bundle.
+
+    This is the exact check the platform runs on upload (vendored in
+    yourbot_sdk._validation). Must run after check_bundle so the zip
+    exists. Errors block; warnings are printed but pass.
+    """
+    try:
+        from tools.validate_artifact import validate
+    except ImportError as e:
+        raise AuditError(f"cannot import validator tool: {e}")
+    try:
+        payload = validate()
+    except ImportError:
+        raise AuditError(
+            "yourbot-sdk is not installed — `py -m pip install yourbot-sdk` "
+            "to run the platform validator locally"
+        )
+    except FileNotFoundError as e:
+        raise AuditError(f"bundle missing: {e}")
+    for w in payload["warnings"]:
+        print(f"        warn  {w['code']}: {w['message']}")
+    if payload["has_errors"]:
+        lines = [f"{e['code']}: {e['message']}" for e in payload["errors"]]
+        raise AuditError("platform validator errors:\n  " + "\n  ".join(lines))
+
+
 GATES = [
     ("manifest", check_manifest),
     ("imports", check_imports),
@@ -253,6 +279,7 @@ GATES = [
     ("plugin_run", check_plugin_run_called),
     ("pytest", check_pytest),
     ("bundle", check_bundle),
+    ("platform_validator", check_platform_validator),
 ]
 
 

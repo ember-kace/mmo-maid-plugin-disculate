@@ -2,7 +2,7 @@
 degrade gracefully, never crash, and always emit a structured log."""
 
 from fakectx import FakeCtx, opt, slash_event
-from mmo_maid_sdk import KvQuotaError, RpcTimeoutError, SdkError
+from yourbot_sdk import KvQuotaError, RpcTimeoutError, SdkError
 
 import plugin as plugin_module
 

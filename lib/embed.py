@@ -42,7 +42,11 @@ BRAND_THUMBNAIL_URL = (
     "https://raw.githubusercontent.com/ember-kace/"
     "mmo-maid-plugin-disculate/main/assets/disculate.webp"
 )
-MMOMAID_URL = "https://mmomaid.cloud/"
+# The platform rebranded from "MMO Maid" (internal codename) to
+# YourBot.gg — the installed SDK's package metadata declares
+# https://yourbot.gg/dev as Homepage, and the 0.6.0 release renamed the
+# package itself (mmo_maid_sdk → yourbot_sdk). v0.2.14 follows suit.
+YOURBOT_URL = "https://yourbot.gg/"
 _BRAND_THUMBNAIL: Dict[str, str] = {"url": BRAND_THUMBNAIL_URL}
 
 EMBED_TITLE_MAX = 256
@@ -337,7 +341,7 @@ def _build_help_payload() -> Dict[str, Any]:
     constants_line = "  ".join(f"`{name}`" for name in sorted(CONSTANTS))
 
     description = "\n".join([
-        f"*Available on [MMO Maid]({MMOMAID_URL})*",
+        f"*Available on [YourBot]({YOURBOT_URL})*",
         "",
         "**Percent**  trailing `%` divides by 100 — e.g. `50%` = `0.5`",
         f"**Constants**  {constants_line}  *(case-sensitive)*",
@@ -414,7 +418,7 @@ def build_help_embed() -> Dict[str, Any]:
     payload = _build_help_payload()
     embed = {
         "title": "Disculate",
-        # v0.2.11: title is no longer a hyperlink. The MMO Maid platform
+        # v0.2.11: title is no longer a hyperlink. The platform
         # link lives as an italic attribution line at the top of the
         # description — clickable via standard markdown link syntax,
         # smaller than the title (description-size, italic), and reads

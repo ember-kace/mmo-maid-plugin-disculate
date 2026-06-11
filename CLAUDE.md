@@ -3,7 +3,8 @@
 ## TL;DR
 
 - **No `eval`, `exec`, or `compile`** on user input. Ever. The parser uses `ast.parse(mode="eval")` and a manual AST walker. Adding any of those calls to `lib/` or `plugin.py` is blocked by `tools/run_audit.py`.
-- **`plugin.run()` must stay at the bottom of `plugin.py`.** It's the SDK handshake — without it the worker exits before connecting. The audit's `plugin_run` gate enforces this.
+- **`plugin.run()` must stay at the bottom of `plugin.py`.** It's the SDK handshake — without it the worker exits before connecting. The audit's `plugin_run` gate enforces this. The platform's entry point is `__main__.py` (required at zip root by the platform validator) — a one-line shim that imports `plugin`, which fires `plugin.run()` on import.
+- **The SDK is `yourbot_sdk` (0.6.x).** Renamed from `mmo_maid_sdk` in 0.6.0; the old name is a deprecation shim slated for removal. Production imports and the test stub both use `yourbot_sdk`; a stub-contract test blocks the legacy import from coming back.
 - Sandbox is `--network none`, empty env, 64 MB RAM, 0.25 vCPU. The plugin makes no outbound HTTP and writes nothing to disk.
 - Every external SDK call is wrapped: cooldown, metrics, respond, and KV all fail open. Look for `try/except` around `ctx.*` calls.
 - Three slash commands: `/calc`, `/calc-config` (admin), `/calc-help`. All replies set `allowed_mentions: {"parse": []}`.
@@ -17,6 +18,7 @@ In-Discord calculator. `/calc expression:<text>` parses the expression with stdl
 | File | Purpose |
 |---|---|
 | `manifest.json` | Plugin id, version, capability declarations, slash command schemas. |
+| `__main__.py` | Platform-required entry point. One line: `import plugin`. Don't add logic here — tests and audit gates scan `plugin.py`. |
 | `plugin.py` | Handlers for `calc`, `calc-config`, `calc-help`, plus `on_ready`. Wires the SDK ctx into the library modules. |
 | `lib/reasons.py` | Reason code constants + `hint_for()` — every failure path returns one of these. |
 | `lib/logctx.py` | `request_id` ContextVar seeded at handler entry. `log_info` / `log_warn` / `log_error` carry it automatically. |
@@ -41,22 +43,19 @@ Ephemeral keys (Redis-backed, LRU-evicted, not durable):
 
 ## SDK ambiguities
 
-See `SDK-ASSUMPTIONS.md` for the full list. Two notable ones:
-
-1. `ctx.interaction.respond` is called with `embeds=[...]` and `allowed_mentions={...}`. The SDK doc shows only `content=` and `components=`; this code assumes Discord-standard embed shape passes through. Probe by triggering any `/calc` and confirming the embed renders.
-2. `event["member"]["permissions"]` may be int or string depending on transport. `_is_admin()` handles both. Probe by running `/calc-config` from an admin account.
+See `SDK-ASSUMPTIONS.md` for the full list — as of the 2026-06-10 source audit against installed `yourbot_sdk` 0.6.1, the formerly-ambiguous signatures are confirmed in SDK source: `interaction.respond` has first-class `embeds=` and `allowed_mentions=` kwargs (`_context.py:_InteractionApi.respond`), and `ephemeral.cooldown_check` returns `{"active", "remaining_seconds"}`. Event shapes (flat `user_id` / `permissions` / `command_options`) remain production-observed rather than typed — `yourbot_sdk.events.InteractionCreate` lists `user_id` but not the other two; the gateway passes unknown fields through, so the defensive fallbacks in `_user_id` / `_is_admin` / `_options` stay.
 
 ## Tests and conventions
 
 - Run: `py -m pytest tests/ -q` from project root.
-- Current count: 247 tests, all green.
-- Layout: one `test_<module>.py` per `lib/` module, plus `test_handlers.py`, `test_stub_contract.py`, `test_failure_injection.py`, `test_adversarial.py`, `test_diagnostics.py`.
-- `tests/conftest.py` stubs `mmo_maid_sdk` so the plugin imports without the real runtime. `test_stub_contract.py` locks the stub surface to what `plugin.py` actually uses.
+- Current count: 285 tests, all green.
+- Layout: one `test_<module>.py` per `lib/` module, plus `test_handlers.py`, `test_stub_contract.py`, `test_failure_injection.py`, `test_adversarial.py`, `test_diagnostics.py`, `test_bundle_contract.py` (platform validator + capability parity), `test_drift.py` (registrations == manifest == README; options == handler reads).
+- `tests/conftest.py` stubs `yourbot_sdk` so the plugin imports without the real runtime, but first captures the REAL `yourbot_sdk._validation` submodule (stdlib-only, no runtime side effects) so platform-contract tests exercise the genuine validator. `test_stub_contract.py` locks the stub surface to what `plugin.py` actually uses and blocks the deprecated `mmo_maid_sdk` import.
 
 ## Build and bundle
 
 - Build: `py tools/build_bundle.py` → writes `build/disculate.zip` (deterministic, mtime=0).
-- Audit: `py tools/run_audit.py` runs all 8 gates (manifest, imports, blocked_substrings, no_eval_ast, todo_markers, plugin_run, pytest, bundle). `blocked_substrings` is the post-v0.2.1 mirror of the marketplace's substring scanner; `no_eval_ast` is the more-precise AST check.
+- Audit: `py tools/run_audit.py` runs all 9 gates (manifest, imports, blocked_substrings, no_eval_ast, todo_markers, plugin_run, pytest, bundle, platform_validator). `blocked_substrings` is the post-v0.2.1 mirror of the marketplace's substring scanner; `no_eval_ast` is the more-precise AST check; `platform_validator` runs the byte-for-byte upload validator vendored in `yourbot_sdk._validation` against the freshly rebuilt zip (standalone: `py tools/validate_artifact.py`).
 - Bundle includes only the explicit allowlist in `tools/build_bundle.py:INCLUDED_FILES`. Tests, tools, docs, `__pycache__`, dotfiles, `assets/`, and `*.md` are excluded by virtue of not being on the list. The brand image lives in `assets/` and is fetched by Discord from `raw.githubusercontent.com` at render time — never bundled.
 
 ## Things that look wrong but aren't
@@ -84,7 +83,7 @@ See `SDK-ASSUMPTIONS.md` for the full list. Two notable ones:
 - **`safe_text_in_code` is intentionally less strict than `safe_text`** (v0.2.7). The expression echo lives inside Discord inline-code spans where `**`, `__`, `~~`, `||` render literally — stripping them (as `safe_text` does) makes the displayed expression lie about what the user typed. Only `safe_text_in_code` should be used for content that will be wrapped in single backticks. Strict `safe_text` is still right for descriptions, headers, field values that ARE outside backticks.
 - **The brand thumbnail URL is hard-coded to `raw.githubusercontent.com/.../main/assets/disculate.webp`** (v0.2.5). Discord caches image URLs aggressively; if we ever rename or move the file, every existing card breaks. Rebrand = REPLACE the asset binary in place (overwrite `assets/disculate.webp`), commit, push. The URL stays the same; Discord re-fetches within minutes. Defined once as `BRAND_THUMBNAIL_URL` in `lib/embed.py`, reused for both the embed thumbnail and `manifest.json:icon_url`.
 - **Only `/calc-help` carries the brand thumbnail as of v0.2.10.** Result and config-updated embeds dropped it — the `## = N` result hero is the dominant visual; the thumbnail competed without adding identity beyond the gold color accent.
-- **`/calc-help` title is just `Disculate` and is not a hyperlink** (v0.2.11). The "Available on [MMO Maid](https://mmomaid.cloud/)" attribution sits as an italic line at the top of the description — clickable, smaller than the title, doesn't compete visually. The constant is `MMOMAID_URL` (was `MARKETPLACE_URL`, which pointed at a deeper marketplace listing URL).
+- **`/calc-help` title is just `Disculate` and is not a hyperlink** (v0.2.11). The "Available on [YourBot](https://yourbot.gg/)" attribution sits as an italic line at the top of the description — clickable, smaller than the title, doesn't compete visually. The constant is `YOURBOT_URL` (v0.2.14; was `MMOMAID_URL` before the platform's MMO Maid → YourBot.gg rebrand, and `MARKETPLACE_URL` before that).
 - **Operators are an embed field, not a description line** (v0.2.11). Five inline fields total in `/calc-help`: Operators + Basic + Roots/Exp/Log + Trig + Hyperbolic (Discord packs 3+2). Below: Examples + Notes (full-width). The Operators field is hand-rolled in `_build_help_payload` — it's not derived from `CATEGORY_ORDER` because operators aren't functions, they live in `parser._ALLOWED_BINOPS` / `_ALLOWED_UNARYOPS`. If you add an operator, manually add a line to the Operators field value.
 - **`assets/disculate.webp` is NOT in `tools/build_bundle.py:INCLUDED_FILES`** (v0.2.5). The brand image is referenced by URL — Discord fetches it from GitHub at render time. Adding it to the bundle would inflate the upload zip for no benefit. The asset must be committed and pushed to `main` for the URL to resolve.
 - **Version is 0.2.x, not 1.0.0.** The handoff's semver policy reserves major bumps for breaking changes; the inaugural release shipped as 0.1.0 and v1.0.0 comes after the SDK-assumption probe completes (`SDK-ASSUMPTIONS.md`). The 0.2.x sub-series has accumulated: marketplace-substring fix (0.2.1), SDK event-shape correction (0.2.2), embed polish (0.2.3), step trace (0.2.4), brand thumbnail (0.2.5), implicit-mult hint extension (0.2.6), `**` display fix (0.2.7), diagnostic explainer (0.2.8). See CHANGELOG.

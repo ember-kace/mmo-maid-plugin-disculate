@@ -1,15 +1,17 @@
 """Disculate — in-Discord calculator.
 
-SDK assumption: MMO Maid SDK v0.5.0 (claude-mmomaid-sdk.md as of
-2026-05-11). See SDK-ASSUMPTIONS.md for the inventory of unverified
-behaviors (interaction.respond embeds= kwarg, member.permissions type,
-ephemeral.cooldown_* return shape, user id path in interaction events).
+SDK: yourbot_sdk 0.6.1 (the package was renamed from mmo_maid_sdk in
+0.6.0; a deprecation shim keeps the old import working, but we import
+the canonical name). The 0.6.1 source confirms the surface this plugin
+relies on — interaction.respond(embeds=, allowed_mentions=), the
+ephemeral.cooldown_* shapes, kv.get None-on-miss — see
+SDK-ASSUMPTIONS.md for the inventory with source citations.
 """
 
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from mmo_maid_sdk import Plugin, Context
+from yourbot_sdk import Plugin, Context
 
 from lib import config as cfg
 from lib import embed as eb

@@ -4,6 +4,51 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.2.14] — 2026-06-10
+
+SDK 0.6.x alignment + drift cleanup, from the tune-up's update audit. The
+platform renamed its SDK package (`mmo_maid_sdk` → `yourbot_sdk` in 0.6.0,
+old name now a deprecation shim with removal planned) and rebranded
+MMO Maid → YourBot.gg (the installed SDK's package metadata declares
+`https://yourbot.gg/dev` as Homepage). Code, tests, embeds, and docs all
+follow; drift guards added so the three command surfaces (code, manifest,
+README) can't silently diverge again.
+
+### Changed
+- **`plugin.py` imports `yourbot_sdk`** instead of the deprecated
+  `mmo_maid_sdk` shim (which warns on import and is slated for removal).
+  Module docstring updated — the SDK-assumption note now cites 0.6.1 source.
+- **`/calc-help` attribution** is now `*Available on [YourBot](https://yourbot.gg/)*`;
+  `lib/embed.py:MMOMAID_URL` → `YOURBOT_URL`. The brand thumbnail URL is
+  untouched (Discord caches it; the raw.githubusercontent.com path keeps
+  working via GitHub's repo-rename redirect).
+- **Test stub renamed** to `yourbot_sdk`. `tests/conftest.py` now captures
+  the real `yourbot_sdk._validation` submodule before installing the stub,
+  so platform-contract tests exercise the genuine validator while plugin
+  imports still get the inert stub Plugin.
+- Docs sweep: README (YourBot branding, 285-test count, 9 gates,
+  `__main__.py` + `validate_artifact.py` in the layout, dev-deps install
+  line), RUNBOOK (§6 upload via yourbot.gg/dev; §8 names the
+  `platform_validator` gate), CLAUDE.md (SDK rename TL;DR, `__main__.py`
+  row, source-confirmed SDK ambiguities, 9-gate audit), SDK-ASSUMPTIONS.md
+  (new "Source audit 2026-06-10" section mapping A1–A11 to 0.6.1 source,
+  including the discovery that `metrics.record` is a blocking RPC — already
+  correctly placed after `respond()` in every handler).
+
+### Added
+- **`tests/test_drift.py`** — three-way drift guards: registered slash
+  handlers == manifest `slash_commands` == README documentation, and
+  manifest option schemas == the option names handlers actually read
+  (AST-derived). 3 tests.
+- **`tests/test_stub_contract.py:test_plugin_does_not_import_legacy_sdk_name`**
+  — blocks `mmo_maid_sdk` from reappearing in production code.
+- **`requirements-dev.txt`** — `yourbot-sdk>=0.6.1,<0.7` + `pytest`. The
+  bundled `requirements.txt` stays empty on purpose (stdlib-only plugin;
+  the platform runtime provides the SDK).
+
+### Test count
+281 → 285.
+
 ## [0.2.13] — 2026-06-10
 
 Artifact entry-point fix. The platform validator (vendored byte-for-byte in

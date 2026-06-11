@@ -103,6 +103,43 @@ The probe completed: 9 of 11 assumptions verified by production traffic, 3 of wh
 | A10 | `ctx.log` kwarg forwarding | VERIFIED |
 | A11 | Embed `thumbnail` forwarding | VERIFIED |
 
-**Net lesson:** SDK doc examples were unreliable in three of seven testable cases. For future MMO Maid plugin work, the first production deploy should always validate event-shape assumptions against the structured log viewer before declaring v1.0.
+**Net lesson:** SDK doc examples were unreliable in three of seven testable cases. For future YourBot plugin work, the first production deploy should always validate event-shape assumptions against the structured log viewer before declaring v1.0.
 
 **Open follow-ups:** None blocking. Defensive try/except blocks at every external `ctx.*` call site remain in place — the verification doesn't justify removing them since the marginal cost is one branch each and the recovery story matters more than the cost.
+
+---
+
+## Source audit (2026-06-10, installed `yourbot_sdk` 0.6.1)
+
+The May probe verified behavior from production traffic; the SDK source was
+not available then. With `yourbot-sdk` 0.6.1 installed, the call-signature
+assumptions are now confirmed **in source** (a stronger guarantee than
+traffic observation — they're part of the SDK's public API, not an
+implementation accident):
+
+| ID | Source confirmation |
+|---|---|
+| A1, A6, A11 | `_context.py:_InteractionApi.respond(*, content, embeds, components, ephemeral, allowed_mentions)` — `embeds` and `allowed_mentions` are first-class kwargs; embed dicts (incl. `thumbnail`) pass through unmodified. |
+| A3 | `_context.py:_EphemeralApi.cooldown_check` docstring + fallback literal: returns `{"active": bool, "remaining_seconds": float}`. Note the float — our `int(remaining)` coercion already handles it. |
+| A4 | `cooldown_set(key, ttl_seconds=60)` — kwarg name confirmed. |
+| A8 | `_KvApi.get` returns `None` on miss (explicit `return None` paths). |
+| A9 | `_MetricsApi.record(metric, value=1.0, tags=None)` — confirmed. Caveat discovered in source: `metrics.record` is a **blocking RPC** (`transport.call`, 30s timeout), not fire-and-forget — keep it after `respond()`, never before (plugin.py already does this). |
+| A10 | `Context.log(message, *, level, tags, **extra)` — extra kwargs land in the structured `extra` dict, values stringified and capped at 500 chars, max 20 keys. |
+
+Event shapes (A2 `permissions`, A5 `user_id`, A7 `command_options`) are
+**still production-observed, not source-typed**: `yourbot_sdk.events.InteractionCreate`
+declares flat `user_id` (confirming A5) but lists neither `permissions` nor
+`command_options`. The module docstring says the gateway passes unknown
+fields through unchanged, which is consistent with what production showed.
+The defensive fallbacks in `_user_id` / `_is_admin` / `_options` stay.
+
+Package rename: `mmo_maid_sdk` → `yourbot_sdk` in SDK 0.6.0. The old name
+ships as a deprecation shim ("will be removed in a future major release").
+Disculate imports `yourbot_sdk` as of v0.2.14; a stub-contract test blocks
+the legacy import from returning.
+
+New 0.6.x surface unused by Disculate (noted for future work):
+`ctx.secrets` (encrypted per-plugin secrets, `storage:secrets`),
+`ctx.kv.list_values` (prefix scan without N+1), `ctx.request_id`
+(SDK-provided correlation id — could eventually replace `lib/logctx`),
+`interaction.followup` returning `{message_id, channel_id}`.

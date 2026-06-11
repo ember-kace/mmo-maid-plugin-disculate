@@ -1,0 +1,5 @@
+# Dev/test environment. The bundled requirements.txt stays empty on
+# purpose — the plugin is stdlib-only and the platform runtime provides
+# the SDK. These are only what a contributor needs locally.
+yourbot-sdk>=0.6.1,<0.7
+pytest>=8

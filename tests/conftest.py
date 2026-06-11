@@ -2,6 +2,16 @@
 
 The stub records what production imports actually use. test_stub_contract.py
 asserts the stub exposes every name the plugin reaches for.
+
+The real ``yourbot_sdk`` may also be installed (it is in dev). Tests must
+NOT get the real ``Plugin`` — its ``run()`` would block reading stdin when
+plugin.py is imported — so the stub unconditionally replaces the top-level
+``sys.modules["yourbot_sdk"]`` entry. The one real piece tests do want is
+``yourbot_sdk._validation`` (the vendored platform validator, stdlib-only,
+no runtime side effects): it is imported FIRST and its ``sys.modules``
+submodule entry is left intact, so ``import yourbot_sdk._validation``
+inside tests resolves to the real module even though the parent name is
+the stub.
 """
 
 import os
@@ -13,8 +23,20 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 
-if "mmo_maid_sdk" not in sys.modules:
-    stub = types.ModuleType("mmo_maid_sdk")
+# Capture the real platform validator before the stub shadows the package.
+try:
+    import yourbot_sdk._validation as _real_validation
+except ImportError:
+    _real_validation = None
+
+
+if not isinstance(sys.modules.get("yourbot_sdk"), types.ModuleType) or not hasattr(
+    sys.modules.get("yourbot_sdk"), "_is_disculate_test_stub"
+):
+    stub = types.ModuleType("yourbot_sdk")
+    stub._is_disculate_test_stub = True
+    if _real_validation is not None:
+        stub._validation = _real_validation
 
     class _Decorators:
         def on_slash_command(self, name):
@@ -160,4 +182,4 @@ if "mmo_maid_sdk" not in sys.modules:
     ):
         setattr(stub, name, locals()[name])
 
-    sys.modules["mmo_maid_sdk"] = stub
+    sys.modules["yourbot_sdk"] = stub

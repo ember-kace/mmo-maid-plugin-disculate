@@ -449,17 +449,20 @@ def test_help_embed_title_is_disculate_without_url():
     assert "url" not in embed
 
 
-def test_help_embed_links_to_mmomaid_platform_in_description():
-    """v0.2.11: the MMO Maid platform link sits as an italic attribution
-    line at the top of the description, smaller than the title."""
-    from lib.embed import MMOMAID_URL
+def test_help_embed_links_to_yourbot_platform_in_description():
+    """v0.2.11: the platform link sits as an italic attribution line at
+    the top of the description, smaller than the title. v0.2.14: the
+    platform rebranded MMO Maid -> YourBot.gg (per the SDK 0.6.x package
+    metadata); the attribution follows."""
+    from lib.embed import YOURBOT_URL
     ctx = FakeCtx()
     plugin_module.cmd_calc_help(ctx, slash_event("calc-help"))
     embed = _embed(_first_response(ctx))
     desc = embed.get("description", "")
-    assert MMOMAID_URL in desc
-    assert "MMO Maid" in desc
-    assert MMOMAID_URL.startswith("https://")
+    assert YOURBOT_URL in desc
+    assert "YourBot" in desc
+    assert "MMO Maid" not in desc
+    assert YOURBOT_URL.startswith("https://")
 
 
 def test_help_embed_has_operators_field():
@@ -613,7 +616,7 @@ def test_calc_handler_survives_malformed_event_shape(bad_payload):
 def test_calc_works_when_ephemeral_raises():
     # T5-05: ephemeral subsystem failures must not block evaluation.
     # The plugin falls open (cooldown ineffective) but still answers.
-    from mmo_maid_sdk import SdkError
+    from yourbot_sdk import SdkError
     ctx = FakeCtx()
 
     def cooldown_check_boom(_key):

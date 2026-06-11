@@ -1,12 +1,12 @@
 # Disculate
 
-An in-Discord calculator plugin for [MMO Maid](https://mmomaid.com). Arithmetic, percentages, common math functions, and constants — without leaving the channel.
+An in-Discord calculator plugin for [YourBot](https://yourbot.gg/). Arithmetic, percentages, common math functions, and constants — without leaving the channel.
 
 > **You:** `/calc expression: (3 + 4) * sqrt(16)`
 >
 > **Disculate:** `(3 + 4) * sqrt(16)` = **28**
 
-Built for the MMO Maid platform's sandboxed plugin runtime. Safe-tier capabilities only (`interaction:respond`, `storage:kv`). No outbound HTTP, no disk writes, no `eval`/`exec`/`compile` on user input.
+Built for the YourBot platform's sandboxed plugin runtime (`yourbot_sdk`; the platform was formerly branded "MMO Maid"). Safe-tier capabilities only (`interaction:respond`, `storage:kv`). No outbound HTTP, no disk writes, no `eval`/`exec`/`compile` on user input.
 
 ## Slash commands
 
@@ -80,15 +80,18 @@ See [AUDIT-REPORT.md](AUDIT-REPORT.md) for the full audit trail.
 
 ```powershell
 # Requirements: Python 3.11+ (tested on 3.11–3.14)
+# Dev deps (test runner + the SDK whose vendored validator the audit uses):
+py -m pip install -r requirements-dev.txt
 
-# Run the test suite (247 tests, ~0.1s)
+# Run the test suite (285 tests, ~0.2s)
 py -m pytest tests/ -q
 
 # Build the deterministic production bundle (build/disculate.zip)
 py tools/build_bundle.py
 
-# Run all 8 audit gates (manifest, imports, blocked_substrings, no_eval_ast,
-#                       todo_markers, plugin_run, pytest, bundle)
+# Run all 9 audit gates (manifest, imports, blocked_substrings, no_eval_ast,
+#                       todo_markers, plugin_run, pytest, bundle,
+#                       platform_validator)
 py tools/run_audit.py
 ```
 
@@ -99,6 +102,7 @@ The bundle excludes everything outside an explicit allowlist (see `tools/build_b
 ```
 disculate/
 ├── manifest.json            ← plugin id, capabilities, slash commands
+├── __main__.py              ← entry point the platform requires; just imports plugin
 ├── plugin.py                ← handler entry points (must end with plugin.run())
 ├── assets/
 │   └── disculate.webp       ← brand thumbnail, referenced by Discord via GitHub raw URL
@@ -112,10 +116,12 @@ disculate/
 │   ├── diagnostics.py       ← per-reason error explainer + did-you-mean
 │   ├── reasons.py           ← reason codes + user-facing hints
 │   └── logctx.py            ← request_id ContextVar for log correlation
-├── tests/                   ← 247 tests: smoke, unit, handler, failure-injection, adversarial, diagnostics
+├── tests/                   ← 285 tests: smoke, unit, handler, failure-injection, adversarial,
+│                              diagnostics, bundle/platform contract, drift guards
 ├── tools/
 │   ├── build_bundle.py      ← deterministic zip with allowlist guard
-│   └── run_audit.py         ← 8 audit gates (incl. marketplace-substring mirror)
+│   ├── run_audit.py         ← 9 audit gates (incl. marketplace-substring mirror)
+│   └── validate_artifact.py ← runs the platform's vendored upload validator on the zip
 └── docs (CLAUDE.md, AUDIT-REPORT.md, ARCHITECTURE.md, RUNBOOK.md, SDK-ASSUMPTIONS.md, CHANGELOG.md)
 ```
 
@@ -139,7 +145,7 @@ Before opening a PR:
 
 ```powershell
 py -m pytest tests/ -q   # all green
-py tools/run_audit.py    # all 8 gates pass
+py tools/run_audit.py    # all 9 gates pass
 ```
 
 ## License

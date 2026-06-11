@@ -64,7 +64,7 @@ We do not cache calc results. This scenario is intentionally not applicable.
 1. `git log --oneline` to find the last known-good commit (typically the v0.2.{N-1} version commit).
 2. `git checkout <commit>` (read-only — don't reset `main`).
 3. `py tools/build_bundle.py` to rebuild `build/disculate.zip` from that tree.
-4. Re-upload via the MMO Maid plugin manager.
+4. Re-upload via the YourBot dev portal (https://yourbot.gg/dev).
 5. Once stable in production, decide whether to revert on `main` (`git revert <bad-commit>`) or leave the bad commit in history with a forward-fix patch.
 **Recovery:** Platform redeploys the previous version. KV config is unaffected (schema-versioned reads tolerate downgrades within the same `CONFIG_SCHEMA_V`). Cooldowns are ephemeral and rebuild themselves within 2 seconds.
 
@@ -86,7 +86,13 @@ We do not cache calc results. This scenario is intentionally not applicable.
 **Symptom:** Platform's upload validator rejects the bundle.
 **Behavior:** New version not deployed.
 **Diagnosis:**
-- Run `py tools/run_audit.py` locally — the `manifest`, `imports`, `no_eval`, `plugin_run`, and `bundle` gates catch most issues before upload.
+- Run `py tools/run_audit.py` locally — the `platform_validator` gate runs the
+  exact validator the platform runs on upload (vendored in
+  `yourbot_sdk._validation`), so a clean audit means the upload check passes
+  byte-for-byte. The other gates (`manifest`, `imports`, `no_eval_ast`,
+  `plugin_run`, `bundle`) catch the rest.
+- `py tools/validate_artifact.py` runs just the platform validator with full
+  JSON output (error codes + hints) when you need the detail.
 - Inspect `build/disculate.zip` — files outside the allowlist in `tools/build_bundle.py` would have been rejected during build.
 **Recovery:** Fix the issue identified by the local audit; rebuild and re-upload.
 

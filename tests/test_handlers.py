@@ -72,6 +72,18 @@ def test_calc_div_by_zero_returns_error_embed():
     assert R.DIV_BY_ZERO in _embed(resp)["footer"]["text"]
 
 
+def test_calc_new_v030_functions_end_to_end():
+    # v0.3.0 registry additions flow through parse -> walk -> format.
+    ctx = FakeCtx()
+    event = slash_event("calc", options=[opt("expression", "trunc(-7/2)")])
+    plugin_module.cmd_calc(ctx, event)
+    assert "= -3" in _embed(_first_response(ctx))["description"]
+    ctx2 = FakeCtx()
+    event2 = slash_event("calc", options=[opt("expression", "gcd(12, 18) + cbrt(27)")])
+    plugin_module.cmd_calc(ctx2, event2)
+    assert "= 9" in _embed(_first_response(ctx2))["description"]
+
+
 def test_calc_uses_per_server_angle_mode():
     ctx = FakeCtx()
     cfg.apply_updates(ctx, {"angle_mode": "deg"})

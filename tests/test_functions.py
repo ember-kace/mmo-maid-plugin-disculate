@@ -102,6 +102,87 @@ def test_trig_radians_default():
     assert call_function("cos", [0], "rad") == pytest.approx(1.0)
 
 
+# --- v0.3.0 additions: inverse hyperbolic, cbrt, gcd/lcm, trunc ------
+
+
+def test_new_functions_in_allowlist():
+    assert {"asinh", "acosh", "atanh", "cbrt", "gcd", "lcm", "trunc"} <= ALL_FUNCTION_NAMES
+
+
+def test_inverse_hyperbolic_happy_path():
+    assert call_function("asinh", [0], "rad") == pytest.approx(0.0)
+    assert call_function("acosh", [1], "rad") == pytest.approx(0.0)
+    assert call_function("atanh", [0], "rad") == pytest.approx(0.0)
+    # Round-trips with the forward functions.
+    assert call_function("asinh", [math.sinh(2.0)], "rad") == pytest.approx(2.0)
+    assert call_function("acosh", [math.cosh(2.0)], "rad") == pytest.approx(2.0)
+    assert call_function("atanh", [math.tanh(0.5)], "rad") == pytest.approx(0.5)
+
+
+def test_inverse_hyperbolic_ignores_angle_mode():
+    # Hyperbolic functions take a real argument, not an angle — deg
+    # mode must not change the result (mirrors sinh/cosh/tanh).
+    assert call_function("asinh", [1], "deg") == call_function("asinh", [1], "rad")
+
+
+@pytest.mark.parametrize("fn, bad", [
+    ("acosh", 0.5),   # needs x >= 1
+    ("acosh", -3),
+    ("atanh", 1),     # needs -1 < x < 1
+    ("atanh", -1),
+    ("atanh", 2),
+])
+def test_inverse_hyperbolic_domain_errors(fn, bad):
+    with pytest.raises(ValueError):
+        call_function(fn, [bad], "rad")
+
+
+def test_cbrt_happy_path():
+    assert call_function("cbrt", [27], "rad") == pytest.approx(3.0)
+    assert call_function("cbrt", [0], "rad") == pytest.approx(0.0)
+    assert call_function("cbrt", [2.5], "rad") == pytest.approx(2.5 ** (1.0 / 3.0))
+
+
+def test_cbrt_handles_negatives_unlike_sqrt():
+    assert call_function("cbrt", [-8], "rad") == pytest.approx(-2.0)
+    with pytest.raises(ValueError):
+        call_function("sqrt", [-8], "rad")
+
+
+def test_gcd_lcm_happy_path():
+    assert call_function("gcd", [12, 18], "rad") == 6
+    assert call_function("gcd", [-12, 18], "rad") == 6
+    assert call_function("gcd", [0, 5], "rad") == 5
+    assert call_function("lcm", [4, 6], "rad") == 12
+    assert call_function("lcm", [0, 5], "rad") == 0
+
+
+def test_gcd_lcm_accept_integral_floats():
+    # Division upstream produces floats: gcd(12/2, 9) must work.
+    assert call_function("gcd", [6.0, 9], "rad") == 3
+    assert call_function("lcm", [4.0, 6.0], "rad") == 12
+
+
+@pytest.mark.parametrize("fn", ["gcd", "lcm"])
+def test_gcd_lcm_reject_fractional(fn):
+    with pytest.raises(ValueError):
+        call_function(fn, [1.5, 3], "rad")
+    with pytest.raises(ValueError):
+        call_function(fn, [3, 0.25], "rad")
+
+
+def test_trunc_rounds_toward_zero():
+    assert call_function("trunc", [3.9], "rad") == 3
+    assert call_function("trunc", [-3.9], "rad") == -3
+    assert call_function("trunc", [5], "rad") == 5
+
+
+def test_trunc_division_gives_c_style_semantics():
+    # The floor-div note in /calc-help points here: -7//2 = -4 (Python),
+    # trunc(-7/2) = -3 (C/Java/JS/Rust).
+    assert call_function("trunc", [-7 / 2], "rad") == -3
+
+
 def test_trig_degrees():
     assert call_function("sin", [30], "deg") == pytest.approx(0.5)
     assert call_function("cos", [60], "deg") == pytest.approx(0.5)

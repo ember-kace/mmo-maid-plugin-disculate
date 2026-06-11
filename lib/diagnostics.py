@@ -185,6 +185,22 @@ _DOMAIN_GUIDANCE = {
         "`acos` requires an argument in `[-1, 1]`.",
         "Check the value being passed — it must fall between -1 and 1 inclusive.",
     ),
+    "acosh": (
+        "`acosh` requires an argument ≥ 1.",
+        "Inverse hyperbolic cosine is only defined from 1 upward.",
+    ),
+    "atanh": (
+        "`atanh` requires an argument strictly between -1 and 1.",
+        "The value must satisfy `-1 < x < 1` (exclusive at both ends).",
+    ),
+    "gcd": (
+        "`gcd` needs whole-number arguments.",
+        "Both arguments must be integers (or floats with no fractional part, like `6.0`).",
+    ),
+    "lcm": (
+        "`lcm` needs whole-number arguments.",
+        "Both arguments must be integers (or floats with no fractional part, like `6.0`).",
+    ),
 }
 
 

@@ -48,7 +48,7 @@ See `SDK-ASSUMPTIONS.md` for the full list — as of the 2026-06-10 source audit
 ## Tests and conventions
 
 - Run: `py -m pytest tests/ -q` from project root.
-- Current count: 297 tests, all green.
+- Current count: 314 tests, all green.
 - Layout: one `test_<module>.py` per `lib/` module, plus `test_handlers.py`, `test_stub_contract.py`, `test_failure_injection.py`, `test_adversarial.py`, `test_diagnostics.py`, `test_bundle_contract.py` (platform validator + capability parity), `test_drift.py` (registrations == manifest == README; options == handler reads), `test_components.py` (help-button render + click round-trip).
 - `tests/conftest.py` stubs `yourbot_sdk` so the plugin imports without the real runtime, but first captures the REAL `yourbot_sdk._validation` submodule (stdlib-only, no runtime side effects) so platform-contract tests exercise the genuine validator. `test_stub_contract.py` locks the stub surface to what `plugin.py` actually uses and blocks the deprecated `mmo_maid_sdk` import.
 

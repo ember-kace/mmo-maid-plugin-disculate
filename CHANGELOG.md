@@ -4,6 +4,44 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.3.0] — 2026-06-10
+
+Seven new functions — the tune-up's expansion phase, scoped to internal
+math capability (the plugin stays zero-HTTP, stdlib-only, Safe-tier; no
+manifest capability changes). Minor bump per the semver policy ("minor =
+new operator/function"). Nothing on the deferred list (factorial, complex,
+bitwise, unit conversions) was touched.
+
+### Added
+- **`asinh(x)` / `acosh(x)` / `atanh(x)`** — completes the Hyperbolic
+  category; trig had its inverses, hyperbolic didn't. Domain errors
+  (`acosh` needs x ≥ 1, `atanh` needs |x| < 1) surface as DOMAIN_ERROR
+  with function-specific guidance in `_DOMAIN_GUIDANCE`.
+- **`cbrt(x)`** — sign-aware cube root, defined for negatives where
+  `sqrt` isn't. Computed via abs+sign (not `math.cbrt`) so behavior
+  doesn't depend on the sandbox's Python minor version.
+- **`gcd(a, b)` / `lcm(a, b)`** — integer utilities. Accept integral
+  floats (`gcd(12/2, 9)` works — division upstream produces floats);
+  fractional arguments raise DOMAIN_ERROR with a whole-numbers hint.
+  Cost is bounded (Euclid on parse-capped literals); no DoS surface.
+- **`trunc(x)`** — rounds toward zero. `trunc(-7/2)` = `-3` gives the
+  C/Java/JS/Rust division semantics that the floor-div Note in
+  `/calc-help` documents as a surprise — the Note now points at it.
+  This is the companion CLAUDE.md anticipated ("if a trunc function
+  ever becomes useful, add it to FUNCTIONS rather than changing `//`").
+- 17 new tests (registry, happy paths, domain errors, integral-float
+  acceptance, angle-mode independence for inverse hyperbolic, e2e
+  through the handler).
+
+### Notes
+- `/calc-help` regenerated automatically from the registry (Basic now
+  11 entries, Roots 7, Hyperbolic 6) and stays under the 6000-char
+  Discord cap — locked by `test_build_help_embed_always_under_cap`.
+- README function table updated to match.
+
+### Test count
+297 → 314.
+
 ## [0.2.15] — 2026-06-10
 
 UX pass: the first message component, a smarter `/calc-help`, honest

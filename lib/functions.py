@@ -228,6 +228,63 @@ def _i_tanh(args, _am):
     return math.tanh(args[0])
 
 
+def _i_asinh(args, _am):
+    return math.asinh(args[0])
+
+
+def _i_acosh(args, _am):
+    # math.acosh raises ValueError for x < 1 → walker maps to DOMAIN_ERROR.
+    return math.acosh(args[0])
+
+
+def _i_atanh(args, _am):
+    # math.atanh raises ValueError for |x| >= 1 → DOMAIN_ERROR.
+    return math.atanh(args[0])
+
+
+def _i_cbrt(args, _am):
+    # Sign-aware cube root: defined for negatives, unlike sqrt.
+    # Computed via abs+sign rather than math.cbrt so behavior doesn't
+    # depend on the sandbox's Python minor version (math.cbrt is 3.11+;
+    # the SDK supports 3.10).
+    x = args[0]
+    if x < 0:
+        return -((-x) ** (1.0 / 3.0))
+    return x ** (1.0 / 3.0)
+
+
+def _int_arg(name: str, v):
+    """Coerce an argument to int for integer-only functions.
+
+    Accepts ints and integral floats (division upstream produces floats,
+    so `gcd(12/2, 9)` should work). Anything fractional raises
+    ValueError → walker maps to DOMAIN_ERROR with the function name.
+    """
+    if isinstance(v, bool):
+        # bool literals are rejected at parse time; defense-in-depth.
+        raise ValueError(f"{name}: arguments must be whole numbers")
+    if isinstance(v, int):
+        return v
+    if isinstance(v, float) and v.is_integer():
+        return int(v)
+    raise ValueError(f"{name}: arguments must be whole numbers")
+
+
+def _i_gcd(args, _am):
+    return math.gcd(_int_arg("gcd", args[0]), _int_arg("gcd", args[1]))
+
+
+def _i_lcm(args, _am):
+    return math.lcm(_int_arg("lcm", args[0]), _int_arg("lcm", args[1]))
+
+
+def _i_trunc(args, _am):
+    # Rounds toward zero — combined with division it gives C-style
+    # integer division: trunc(-7/2) = -3 where -7//2 = -4. This is the
+    # companion the floor-div note in /calc-help points at.
+    return math.trunc(args[0])
+
+
 # --- Registry --------------------------------------------------------
 
 
@@ -249,7 +306,11 @@ FUNCTIONS: List[FunctionSpec] = [
     FunctionSpec("max",    _i_max,    ARITY_VARIADIC, CATEGORY_BASIC, "max(a, b, ...)"),
     FunctionSpec("mod",    _i_mod,    2,      CATEGORY_BASIC, "mod(a, b)"),
     FunctionSpec("pow",    _i_pow,    2,      CATEGORY_BASIC, "pow(a, b)"),
+    FunctionSpec("gcd",    _i_gcd,    2,      CATEGORY_BASIC, "gcd(a, b)"),
+    FunctionSpec("lcm",    _i_lcm,    2,      CATEGORY_BASIC, "lcm(a, b)"),
+    FunctionSpec("trunc",  _i_trunc,  1,      CATEGORY_BASIC, "trunc(x)"),
     FunctionSpec("sqrt",   _i_sqrt,   1,      CATEGORY_ROOTS_EXP_LOG, "sqrt(x)"),
+    FunctionSpec("cbrt",   _i_cbrt,   1,      CATEGORY_ROOTS_EXP_LOG, "cbrt(x)"),
     FunctionSpec("exp",    _i_exp,    1,      CATEGORY_ROOTS_EXP_LOG, "exp(x)"),
     FunctionSpec("log",    _i_log,    (1, 2), CATEGORY_ROOTS_EXP_LOG, "log(x[, base])"),
     FunctionSpec("log10",  _i_log10,  1,      CATEGORY_ROOTS_EXP_LOG, "log10(x)"),
@@ -265,6 +326,9 @@ FUNCTIONS: List[FunctionSpec] = [
     FunctionSpec("sinh",   _i_sinh,   1,      CATEGORY_HYPERBOLIC, "sinh(x)"),
     FunctionSpec("cosh",   _i_cosh,   1,      CATEGORY_HYPERBOLIC, "cosh(x)"),
     FunctionSpec("tanh",   _i_tanh,   1,      CATEGORY_HYPERBOLIC, "tanh(x)"),
+    FunctionSpec("asinh",  _i_asinh,  1,      CATEGORY_HYPERBOLIC, "asinh(x)"),
+    FunctionSpec("acosh",  _i_acosh,  1,      CATEGORY_HYPERBOLIC, "acosh(x)"),
+    FunctionSpec("atanh",  _i_atanh,  1,      CATEGORY_HYPERBOLIC, "atanh(x)"),
 ]
 
 _REGISTRY: dict = {spec.name: spec for spec in FUNCTIONS}

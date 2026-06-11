@@ -28,10 +28,10 @@ Built for the YourBot platform's sandboxed plugin runtime (`yourbot_sdk`; the pl
 
 | Category | Names |
 |---|---|
-| Basic | `abs(x)` `round(x[, n])` `floor(x)` `ceil(x)` `min(a, b, ...)` `max(a, b, ...)` `mod(a, b)` `pow(a, b)` |
-| Roots / exp / log | `sqrt(x)` `exp(x)` `log(x[, base])` `log10(x)` `log2(x)` `ln(x)` |
+| Basic | `abs(x)` `round(x[, n])` `floor(x)` `ceil(x)` `min(a, b, ...)` `max(a, b, ...)` `mod(a, b)` `pow(a, b)` `gcd(a, b)` `lcm(a, b)` `trunc(x)` |
+| Roots / exp / log | `sqrt(x)` `cbrt(x)` `exp(x)` `log(x[, base])` `log10(x)` `log2(x)` `ln(x)` |
 | Trig (honours `angle_mode`) | `sin` `cos` `tan` `asin` `acos` `atan` `atan2(y, x)` |
-| Hyperbolic | `sinh(x)` `cosh(x)` `tanh(x)` |
+| Hyperbolic | `sinh(x)` `cosh(x)` `tanh(x)` `asinh(x)` `acosh(x)` `atanh(x)` |
 
 ## Examples
 
@@ -83,7 +83,7 @@ See [AUDIT-REPORT.md](AUDIT-REPORT.md) for the full audit trail.
 # Dev deps (test runner + the SDK whose vendored validator the audit uses):
 py -m pip install -r requirements-dev.txt
 
-# Run the test suite (297 tests, ~0.2s)
+# Run the test suite (314 tests, ~0.2s)
 py -m pytest tests/ -q
 
 # Build the deterministic production bundle (build/disculate.zip)
@@ -116,7 +116,7 @@ disculate/
 │   ├── diagnostics.py       ← per-reason error explainer + did-you-mean
 │   ├── reasons.py           ← reason codes + user-facing hints
 │   └── logctx.py            ← request_id ContextVar for log correlation
-├── tests/                   ← 297 tests: smoke, unit, handler, failure-injection, adversarial,
+├── tests/                   ← 314 tests: smoke, unit, handler, failure-injection, adversarial,
 │                              diagnostics, bundle/platform contract, drift guards, components
 ├── tools/
 │   ├── build_bundle.py      ← deterministic zip with allowlist guard

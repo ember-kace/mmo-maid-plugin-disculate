@@ -11,15 +11,18 @@ from fakectx import FakeCtx, opt, slash_event
 import plugin as plugin_module
 from lib import config as cfg
 from lib import embed as eb
+from lib import reasons as R
+
+ADMIN_PERMS = 0x20  # MANAGE_GUILD
 
 
-def _component_event(custom_id, user_id="111"):
+def _component_event(custom_id, user_id="111", permissions=0):
     return {
         "type": "interaction_create",
         "interaction_type": 3,
         "custom_id": custom_id,
         "user_id": user_id,
-        "permissions": "0",
+        "permissions": str(permissions),
     }
 
 
@@ -76,11 +79,35 @@ def test_success_response_has_no_components():
 # --- click round-trip --------------------------------------------------
 
 
-def test_help_button_click_renders_help_ephemerally():
+def test_help_button_click_updates_error_message_in_place():
+    # SDK 0.7: the button edits the (ephemeral) error message into the
+    # help card rather than stacking a second ephemeral. An updated
+    # message keeps its original visibility, so help stays ephemeral —
+    # and the Show-help button is cleared (no components carried).
     ctx = FakeCtx()
     plugin_module.comp_show_help(ctx, _component_event("dch:help:parse_error"))
     resp = _first_response(ctx)
-    assert resp["ephemeral"] is True
+    assert resp.get("update_message") is True
+    assert _embed(resp)["title"] == "Disculate"
+    assert not resp.get("components")
+
+
+def test_help_button_click_falls_back_on_pre_0_7_host():
+    # A host whose respond() predates update_message= raises TypeError;
+    # the help must still render, degraded to a fresh ephemeral reply.
+    ctx = FakeCtx()
+    real_respond = ctx.interaction.respond
+
+    def respond(**kwargs):
+        if kwargs.get("update_message"):
+            raise TypeError("respond() got an unexpected keyword 'update_message'")
+        return real_respond(**kwargs)
+
+    ctx.interaction.respond = respond
+    plugin_module.comp_show_help(ctx, _component_event("dch:help:overflow"))
+    resp = _first_response(ctx)
+    assert resp.get("ephemeral") is True
+    assert "update_message" not in resp
     assert _embed(resp)["title"] == "Disculate"
 
 
@@ -147,3 +174,113 @@ def test_help_embed_without_config_omits_settings_field():
     embed = eb.build_help_embed()
     names = {f["name"] for f in embed.get("fields", [])}
     assert "Server settings" not in names
+    assert "Getting started" not in names
+
+
+# --- v0.4.0: quick-start + one-click angle toggle ----------------------
+
+
+def test_help_shows_quickstart_when_never_configured():
+    # Fresh server (updated_at == 0) gets the numbered quick-start, not
+    # an echo of default settings.
+    ctx = FakeCtx()
+    plugin_module.cmd_calc_help(ctx, slash_event("calc-help"))
+    embed = _embed(_first_response(ctx))
+    fields = {f["name"]: f for f in embed["fields"]}
+    assert "Getting started" in fields
+    assert "Server settings" not in fields
+    assert "1." in fields["Getting started"]["value"]
+
+
+def test_help_shows_server_settings_once_configured():
+    ctx = FakeCtx()
+    cfg.apply_updates(ctx, {"angle_mode": "deg"})
+    plugin_module.cmd_calc_help(ctx, slash_event("calc-help"))
+    embed = _embed(_first_response(ctx))
+    names = {f["name"] for f in embed["fields"]}
+    assert "Server settings" in names
+    assert "Getting started" not in names
+
+
+def test_help_lists_every_command():
+    ctx = FakeCtx()
+    plugin_module.cmd_calc_help(ctx, slash_event("calc-help"))
+    embed = _embed(_first_response(ctx))
+    body = embed.get("description", "") + " ".join(
+        f.get("value", "") for f in embed.get("fields", [])
+    )
+    for name in ("/calc", "/calc-config", "/calc-help"):
+        assert name in body, f"{name} missing from /calc-help"
+
+
+def test_config_view_shows_angle_toggle_button():
+    ctx = FakeCtx()
+    plugin_module.cmd_calc_config(
+        ctx, slash_event("calc-config", options=[], permissions=ADMIN_PERMS)
+    )
+    btn = _button(_first_response(ctx))
+    assert btn["custom_id"].startswith(eb.ANGLE_TOGGLE_CUSTOM_ID_PREFIX)
+    # Default angle is radians → button offers degrees.
+    assert btn["custom_id"].endswith(":deg")
+    assert "degrees" in btn["label"].lower()
+
+
+def test_config_update_path_carries_no_toggle():
+    # An admin who set an option clearly knows the command — keep the
+    # updated card clean.
+    ctx = FakeCtx()
+    plugin_module.cmd_calc_config(
+        ctx,
+        slash_event("calc-config", options=[opt("precision", 3)], permissions=ADMIN_PERMS),
+    )
+    assert not _first_response(ctx).get("components")
+
+
+def test_angle_toggle_click_flips_mode_in_place():
+    ctx = FakeCtx()
+    plugin_module.comp_set_angle(
+        ctx, _component_event("dcc:angle:deg", permissions=ADMIN_PERMS)
+    )
+    resp = _first_response(ctx)
+    assert resp.get("update_message") is True
+    assert ctx.kv.store[cfg.CONFIG_KEY]["angle_mode"] == "deg"
+    # The refreshed card now offers the opposite (back to radians).
+    assert _button(resp)["custom_id"].endswith(":rad")
+
+
+def test_angle_toggle_click_requires_admin():
+    ctx = FakeCtx()
+    plugin_module.comp_set_angle(
+        ctx, _component_event("dcc:angle:deg", permissions=0)
+    )
+    resp = _first_response(ctx)
+    assert resp["ephemeral"] is True
+    assert R.NOT_ADMIN in _embed(resp)["footer"]["text"]
+    assert cfg.CONFIG_KEY not in ctx.kv.store  # nothing persisted
+
+
+def test_angle_toggle_click_with_stale_target_refuses_cleanly():
+    # A hand-crafted / stale custom_id with a bad target is refused via
+    # the normal config-validation path, not a crash.
+    ctx = FakeCtx()
+    plugin_module.comp_set_angle(
+        ctx, _component_event("dcc:angle:bogus", permissions=ADMIN_PERMS)
+    )
+    resp = _first_response(ctx)
+    assert R.CONFIG_INVALID in _embed(resp)["footer"]["text"]
+    assert cfg.CONFIG_KEY not in ctx.kv.store
+
+
+def test_angle_toggle_click_records_component_metric():
+    ctx = FakeCtx()
+    plugin_module.comp_set_angle(
+        ctx, _component_event("dcc:angle:deg", permissions=ADMIN_PERMS)
+    )
+    clicks = [m for m in ctx.metrics.recorded if m["name"] == "component_click"]
+    assert clicks
+    assert clicks[0]["tags"] == {"component": "angle_toggle", "reason": "deg"}
+
+
+def test_angle_toggle_handler_registered_with_prefix():
+    handlers = plugin_module.plugin._handlers.get("component", {})
+    assert eb.ANGLE_TOGGLE_CUSTOM_ID_PREFIX in handlers

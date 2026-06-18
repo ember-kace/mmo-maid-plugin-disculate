@@ -4,6 +4,53 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.4.0] — 2026-06-17
+
+UX pass (the tune-up's interaction phase). Minor bump: a new component
+surface and richer help, no capability change (components ride on the
+`interaction:respond` cap the plugin already has) and no math behavior
+change. Built on the 0.7.x `respond(update_message=True)` confirmed
+backward-compatible in v0.3.1.
+
+### Added
+- **One-click angle-mode toggle** on the `/calc-config` read-only view —
+  a "Switch to degrees / radians" button (`comp_set_angle`, prefix
+  `dcc:angle:`). Radians-vs-degrees is the single highest-friction
+  setting (it drives the "why isn't sin(90) = 1?" confusion), so a fresh
+  admin can fix it in one click without learning the option syntax.
+  Admin is **re-checked on click** (defense-in-depth); a stale/garbage
+  target is refused through the normal config-validation path; the card
+  is edited in place with a fresh toggle for the new opposite mode.
+- **Commands overview** field at the top of `/calc-help` — teaches that
+  `/calc-config` (admin) and `/calc-help` exist, not just `/calc`.
+  `tests/test_drift.py:test_help_payload_lists_every_command` keeps it
+  covering exactly the manifest command set.
+- **Adaptive help tail**: a numbered **Getting started** quick-start when
+  the server has never configured anything (`updated_at == 0`), replaced
+  by the live **Server settings** line once an admin has saved config.
+- `_respond_update` helper + `_record_component_click` shielded surface
+  counter (`component_click` now tags `angle_toggle` alongside `help`).
+- 12 new tests: in-place help, pre-0.7 fallback, quick-start vs
+  server-settings, commands coverage, toggle render, admin/stale/flip
+  round-trips, toggle metric, handler registration.
+
+### Changed
+- **The "Show help" button edits the error message in place** (Discord
+  UPDATE_MESSAGE via 0.7's `respond(update_message=True)`) instead of
+  posting a second ephemeral on top of the error — one message, and the
+  button clears itself on update. Falls back to a fresh ephemeral reply
+  on a pre-0.7 host whose `respond()` rejects the kwarg, so help never
+  silently vanishes.
+
+### Notes
+- No new capabilities or slash commands; `manifest.json` capability set
+  and command set are unchanged (audit `check_manifest` still pins them).
+- Components need no manifest declaration — `interaction:respond` covers
+  both slash and component handling.
+
+### Test count
+317 → 329.
+
 ## [0.3.1] — 2026-06-17
 
 SDK 0.6.x → 0.7.x compatibility + drift refresh. Patch bump (no behavior

@@ -304,6 +304,36 @@ def help_button_row(reason: str) -> Dict[str, Any]:
     }
 
 
+# Component custom_id prefix for the one-click angle-mode toggle shown on
+# the /calc-config view. The TARGET mode ("rad"/"deg") is appended after
+# the prefix; the handler parses it from the END of the id (rsplit) — the
+# prefix itself contains ':'.
+ANGLE_TOGGLE_CUSTOM_ID_PREFIX = "dcc:angle:"
+
+
+def angle_toggle_row(current_angle_mode: str) -> Dict[str, Any]:
+    """A one-click button that flips the server's angle mode to the OTHER
+    setting.
+
+    Offered on the read-only /calc-config view so a fresh admin can reach
+    degrees mode — the #1 source of trig confusion ("why isn't sin(90) =
+    1?") — in one click, without learning the option syntax. The target
+    mode is encoded in the custom_id; admin is re-checked on click.
+    """
+    target = "rad" if current_angle_mode == "deg" else "deg"
+    label = "Switch to radians" if target == "rad" else "Switch to degrees"
+    custom_id = f"{ANGLE_TOGGLE_CUSTOM_ID_PREFIX}{target}"[:100]
+    return {
+        "type": 1,  # ACTION_ROW
+        "components": [{
+            "type": 2,       # BUTTON
+            "style": 2,      # SECONDARY (grey) — a convenience, not the headline action
+            "label": label,
+            "custom_id": custom_id,
+        }],
+    }
+
+
 def build_cooldown_embed(seconds_remaining: int) -> Dict[str, Any]:
     s = max(1, int(seconds_remaining))
     embed = {
@@ -378,9 +408,25 @@ def _build_help_payload() -> Dict[str, Any]:
 
     fields: List[Dict[str, Any]] = []
 
+    # Commands overview — full-width, first, so a newcomer sees WHAT they
+    # can run (especially that admin-only `/calc-config` exists) before
+    # the syntax reference. The drift guard
+    # test_help_lists_every_command asserts every manifest slash command
+    # appears here, so this can't silently fall behind the command set.
+    commands_value = "\n".join([
+        "`/calc <expression>` — evaluate math (add `ephemeral:true` to hide the result)",
+        "`/calc-config` — precision, angle mode, scientific cutoff *(admin)*",
+        "`/calc-help` — this reference",
+    ])
+    fields.append({
+        "name": "Commands",
+        "value": clip(commands_value, EMBED_FIELD_VALUE_MAX),
+        "inline": False,
+    })
+
     # Operators field — one entry per operator with a short label, so
     # users can tell `//` (floor-div) from `**` (power) at a glance.
-    # Placed first so the order in the rendered grid is intuitive:
+    # Placed first among the inline fields so the rendered grid reads
     # operators -> basic functions -> rest.
     operators_value = "\n".join([
         "`+`  add",
@@ -448,23 +494,39 @@ def build_help_embed(config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     payload = _build_help_payload()
     fields = list(payload["fields"])
     if config:
-        # Live per-server settings as the last full-width field. The
-        # static reference above teaches syntax; this line teaches what
-        # THIS server is configured to do right now and where to change
-        # it — the #1 trig confusion ("why is sin(90) not 1?") is an
-        # angle-mode discovery problem.
-        angle = "degrees" if config.get("angle_mode") == "deg" else "radians"
-        settings_value = (
-            f"Precision **{config.get('precision')}** · "
-            f"Angle **{angle}** · "
-            f"Scientific notation at **10^{config.get('scientific_threshold')}** "
-            "— adjust with `/calc-config` (admin)."
-        )
-        fields.append({
-            "name": "Server settings",
-            "value": clip(settings_value, EMBED_FIELD_VALUE_MAX),
-            "inline": False,
-        })
+        # `updated_at == 0` is the DEFAULTS sentinel (lib/config.py) — it
+        # means no admin has saved config on this server yet. Fresh
+        # servers get a numbered quick-start (teach the first moves)
+        # instead of an echo of the defaults; configured servers get the
+        # live settings line. The #1 trig confusion ("why is sin(90) not
+        # 1?") is an angle-mode discovery problem, so both variants point
+        # at angle mode + /calc-config.
+        never_configured = config.get("updated_at") in (0, None)
+        if never_configured:
+            quickstart_value = (
+                "1. `/calc 2 * (3 + 4)` — arithmetic with parentheses\n"
+                "2. `/calc sqrt(2) + pi` — functions and constants\n"
+                "3. `/calc sin(90)` — trig (radians by default; an admin can "
+                "switch to degrees with `/calc-config`)"
+            )
+            fields.append({
+                "name": "Getting started",
+                "value": clip(quickstart_value, EMBED_FIELD_VALUE_MAX),
+                "inline": False,
+            })
+        else:
+            angle = "degrees" if config.get("angle_mode") == "deg" else "radians"
+            settings_value = (
+                f"Precision **{config.get('precision')}** · "
+                f"Angle **{angle}** · "
+                f"Scientific notation at **10^{config.get('scientific_threshold')}** "
+                "— adjust with `/calc-config` (admin)."
+            )
+            fields.append({
+                "name": "Server settings",
+                "value": clip(settings_value, EMBED_FIELD_VALUE_MAX),
+                "inline": False,
+            })
     embed = {
         "title": "Disculate",
         # v0.2.11: title is no longer a hyperlink. The platform

@@ -129,6 +129,46 @@ def _safe_respond(ctx: Context, **kwargs: Any) -> None:
         logctx.log_error(ctx, "respond failed", err=str(e))
 
 
+def _respond_update(ctx: Context, **kwargs: Any) -> None:
+    """Edit the component's source message in place — Discord
+    UPDATE_MESSAGE via SDK 0.7's ``respond(update_message=True)`` —
+    instead of stacking a new ephemeral reply on top of the one the
+    button is attached to. ``respond`` always sends a components list
+    (defaulting to ``[]``), so any caller that omits ``components=``
+    clears the button as a side effect.
+
+    Only valid inside a component handler. On a pre-0.7 host whose
+    ``respond`` has no ``update_message`` param, the call raises
+    TypeError; we fall back to a fresh ephemeral reply so the content
+    still reaches the user (degraded, not lost).
+    """
+    kwargs.setdefault("allowed_mentions", eb.ALLOWED_MENTIONS_NONE)
+    try:
+        ctx.interaction.respond(update_message=True, **kwargs)
+    except TypeError:
+        kwargs["ephemeral"] = True
+        try:
+            ctx.interaction.respond(**kwargs)
+        except Exception as e:
+            logctx.log_error(ctx, "respond failed", err=str(e))
+    except Exception as e:
+        logctx.log_error(ctx, "respond failed", err=str(e))
+
+
+def _record_component_click(ctx: Context, component: str, reason: str) -> None:
+    """Shielded surface counter for message-component interactions.
+    Bounded cardinality: ``component`` is from a fixed set, ``reason`` is
+    a reason code / mode string."""
+    try:
+        ctx.metrics.record(
+            "component_click",
+            value=1,
+            tags={"component": component, "reason": reason or "unknown"},
+        )
+    except Exception as e:
+        logctx.log_warn(ctx, "metrics record failed", err=str(e))
+
+
 def _record_metric(ctx: Context, result_tag: str, started_at: float) -> None:
     """Emit calc_eval + calc_latency_ms metrics.
 
@@ -331,11 +371,17 @@ def cmd_calc_config(ctx: Context, event: Dict[str, Any]):
         return
 
     changed: List[str] = list(updates.keys())
-    _safe_respond(
-        ctx,
-        embeds=[eb.build_config_embed(merged, changed)],
-        ephemeral=True,
-    )
+    respond_kwargs: Dict[str, Any] = {
+        "embeds": [eb.build_config_embed(merged, changed)],
+        "ephemeral": True,
+    }
+    if not changed:
+        # Read-only view: offer the one-click angle-mode toggle (the
+        # highest-friction setting — radians vs degrees drives the most
+        # common "wrong" trig answers). Updated cards omit it: the admin
+        # just used the command, so the option is clearly already known.
+        respond_kwargs["components"] = [eb.angle_toggle_row(merged["angle_mode"])]
+    _safe_respond(ctx, **respond_kwargs)
     if changed:
         for field in changed:
             _record_config(ctx, "ok", field=field)
@@ -358,25 +404,63 @@ def cmd_calc_help(ctx: Context, event: Dict[str, Any]):
 
 @plugin.on_component(prefix=eb.HELP_BUTTON_CUSTOM_ID_PREFIX)
 def comp_show_help(ctx: Context, event: Dict[str, Any]):
-    """'Show help' button on error embeds. The custom_id carries the
-    originating error reason after the prefix — parse it from the END
-    of the id (the prefix itself contains `:`)."""
+    """'Show help' button on error embeds. Edits the (ephemeral) error
+    message into the help card in place (SDK 0.7 UPDATE_MESSAGE) so the
+    user gets one message, not a second ephemeral stacked on the error;
+    the Show-help button drops away (the in-place update sends an empty
+    components list). The custom_id carries the originating error reason
+    after the prefix — parse it from the END of the id (the prefix itself
+    contains `:`)."""
     logctx.new_request_id()
-    _safe_respond(
-        ctx,
-        embeds=[eb.build_help_embed(cfg.get_config(ctx))],
-        ephemeral=True,
-    )
+    _respond_update(ctx, embeds=[eb.build_help_embed(cfg.get_config(ctx))])
     cid = event.get("custom_id", "")
     reason = cid.rsplit(":", 1)[-1] if isinstance(cid, str) else ""
+    _record_component_click(ctx, "help", reason)
+
+
+@plugin.on_component(prefix=eb.ANGLE_TOGGLE_CUSTOM_ID_PREFIX)
+def comp_set_angle(ctx: Context, event: Dict[str, Any]):
+    """One-click angle-mode toggle from the /calc-config view.
+
+    Re-checks admin on click — defense-in-depth: the button lives on an
+    ephemeral message only the invoker can interact with, but the caller
+    might have lost the permission since the card rendered. The target
+    mode is encoded at the END of the custom_id; a stale/garbage target
+    is refused through the normal config-validation path. On success the
+    card is edited in place with a fresh toggle for the new opposite
+    mode, so repeated clicks flip cleanly."""
+    logctx.new_request_id()
+    if not _is_admin(event):
+        _safe_respond(ctx, embeds=[eb.build_error_embed("", R.NOT_ADMIN)], ephemeral=True)
+        _record_component_click(ctx, "angle_toggle", R.NOT_ADMIN)
+        return
+
+    cid = event.get("custom_id", "")
+    target = cid.rsplit(":", 1)[-1] if isinstance(cid, str) else ""
+    updates, errors = cfg.validate_updates(
+        precision=None,
+        angle_mode=target,
+        scientific_threshold=None,
+    )
+    if errors:
+        _safe_respond(ctx, embeds=[eb.build_config_error_embed(errors)], ephemeral=True)
+        _record_component_click(ctx, "angle_toggle", R.CONFIG_INVALID)
+        return
+
     try:
-        ctx.metrics.record(
-            "component_click",
-            value=1,
-            tags={"component": "help", "reason": reason or "unknown"},
-        )
+        merged = cfg.apply_updates(ctx, updates)
     except Exception as e:
-        logctx.log_warn(ctx, "metrics record failed", err=str(e))
+        logctx.log_error(ctx, "config apply failed", err=str(e))
+        _safe_respond(ctx, embeds=[eb.build_error_embed("", R.INTERNAL)], ephemeral=True)
+        _record_component_click(ctx, "angle_toggle", R.INTERNAL)
+        return
+
+    _respond_update(
+        ctx,
+        embeds=[eb.build_config_embed(merged, ["angle_mode"])],
+        components=[eb.angle_toggle_row(merged["angle_mode"])],
+    )
+    _record_component_click(ctx, "angle_toggle", merged["angle_mode"])
 
 
 plugin.run()

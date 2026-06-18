@@ -41,6 +41,20 @@ def test_manifest_commands_documented_in_readme():
         assert f"/{name}" in readme, f"/{name} missing from README"
 
 
+def test_help_payload_lists_every_command():
+    """The in-Discord /calc-help Commands field must cover exactly the
+    manifest command set — a new command that never appears in help is
+    undiscoverable to users (v0.4.0 Commands overview)."""
+    from lib import embed as eb
+
+    payload = eb._build_help_payload()
+    text = payload["description"] + " ".join(
+        f["name"] + " " + f["value"] for f in payload["fields"]
+    )
+    for name in _manifest_command_names():
+        assert f"/{name}" in text, f"/{name} missing from /calc-help payload"
+
+
 def test_manifest_options_match_handler_reads():
     """Every option name the calc/calc-config handlers read out of
     ``_options(event)`` must exist in the manifest schema (else Discord

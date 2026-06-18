@@ -53,7 +53,9 @@ Built for the YourBot platform's sandboxed plugin runtime (`yourbot_sdk`; the pl
 | `((1+2)` | error: *Unclosed parenthesis. 1 more `(` than `)`. Add 1 `)` to balance the expression.* |
 | `sqrt(-1)` | error: *`sqrt` of a negative value isn't a real number. Try `sqrt(abs(x))` if you want the magnitude.* |
 
-Errors aren't generic. Disculate identifies the specific problem in your input — close-typo suggestions for unknown names and functions, paren-balance counts, function-specific domain explanations, operator-mistake hints. Every error embed shows what's wrong on top, how to fix it next, a `reason: <code>` footer for tracking, and a **Show help** button that opens the full syntax reference in one click.
+Errors aren't generic. Disculate identifies the specific problem in your input — close-typo suggestions for unknown names and functions, paren-balance counts, function-specific domain explanations, operator-mistake hints. Every error embed shows what's wrong on top, how to fix it next, a `reason: <code>` footer for tracking, and a **Show help** button that swaps the error for the full syntax reference in place — one message, not two.
+
+`/calc-help` leads with a **Commands** overview and adapts to the server: a fresh install (nothing configured yet) sees a numbered **Getting started** quick-start; a configured server sees its live **Server settings**. Running `/calc-config` with no options shows the current settings plus a one-click **Switch to degrees / radians** button so an admin can fix the most common trig surprise without learning the option syntax.
 
 ## Configuration
 

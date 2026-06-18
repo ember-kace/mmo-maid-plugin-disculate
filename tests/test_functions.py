@@ -199,6 +199,28 @@ def test_hyperbolic_not_affected_by_angle_mode():
     assert rad == deg
 
 
+def test_hypot_happy_path():
+    assert call_function("hypot", [3, 4], "rad") == pytest.approx(5.0)
+    assert call_function("hypot", [0, 0], "rad") == pytest.approx(0.0)
+    assert call_function("hypot", [5, 12], "rad") == pytest.approx(13.0)
+    # Negative operands square away — result is always non-negative.
+    assert call_function("hypot", [-3, -4], "rad") == pytest.approx(5.0)
+
+
+def test_hypot_ignores_angle_mode():
+    assert call_function("hypot", [3, 4], "deg") == call_function("hypot", [3, 4], "rad")
+
+
+def test_sign_returns_int_negative_zero_positive():
+    assert call_function("sign", [5], "rad") == 1
+    assert call_function("sign", [-2.5], "rad") == -1
+    assert call_function("sign", [0], "rad") == 0
+    # -0.0 maps to 0, not -1.
+    assert call_function("sign", [-0.0], "rad") == 0
+    # int in / int out — no spurious decimal in the formatted result.
+    assert isinstance(call_function("sign", [3.7], "rad"), int)
+
+
 def test_round_rejects_non_integer_ndigits():
     with pytest.raises(ValueError):
         call_function("round", [1.5, 1.5], "rad")

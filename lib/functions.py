@@ -285,6 +285,23 @@ def _i_trunc(args, _am):
     return math.trunc(args[0])
 
 
+def _i_hypot(args, _am):
+    # Euclidean distance / hypotenuse: sqrt(x^2 + y^2), computed by the
+    # stdlib to avoid intermediate overflow. Always defined (no domain
+    # error), result is non-negative. Bounded: two finite operands in,
+    # one finite float out — no DoS surface.
+    return math.hypot(args[0], args[1])
+
+
+def _i_sign(args, _am):
+    # Sign function: -1, 0, or +1. The `(x > 0) - (x < 0)` idiom yields a
+    # plain int for both int and float input (and maps -0.0 -> 0), so the
+    # result formats as `-1` / `0` / `1` with no spurious decimal. Args
+    # are already finite (the walker rejects nan/inf operands upstream).
+    x = args[0]
+    return (x > 0) - (x < 0)
+
+
 # --- Registry --------------------------------------------------------
 
 
@@ -309,6 +326,8 @@ FUNCTIONS: List[FunctionSpec] = [
     FunctionSpec("gcd",    _i_gcd,    2,      CATEGORY_BASIC, "gcd(a, b)"),
     FunctionSpec("lcm",    _i_lcm,    2,      CATEGORY_BASIC, "lcm(a, b)"),
     FunctionSpec("trunc",  _i_trunc,  1,      CATEGORY_BASIC, "trunc(x)"),
+    FunctionSpec("hypot",  _i_hypot,  2,      CATEGORY_BASIC, "hypot(x, y)"),
+    FunctionSpec("sign",   _i_sign,   1,      CATEGORY_BASIC, "sign(x)"),
     FunctionSpec("sqrt",   _i_sqrt,   1,      CATEGORY_ROOTS_EXP_LOG, "sqrt(x)"),
     FunctionSpec("cbrt",   _i_cbrt,   1,      CATEGORY_ROOTS_EXP_LOG, "cbrt(x)"),
     FunctionSpec("exp",    _i_exp,    1,      CATEGORY_ROOTS_EXP_LOG, "exp(x)"),

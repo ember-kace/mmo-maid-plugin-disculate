@@ -84,6 +84,16 @@ def test_calc_new_v030_functions_end_to_end():
     assert "= 9" in _embed(_first_response(ctx2))["description"]
 
 
+def test_calc_v050_functions_end_to_end():
+    # v0.5.0 additions flow through parse -> walk -> format.
+    ctx = FakeCtx()
+    plugin_module.cmd_calc(ctx, slash_event("calc", options=[opt("expression", "hypot(3, 4)")]))
+    assert "= 5" in _embed(_first_response(ctx))["description"]
+    ctx2 = FakeCtx()
+    plugin_module.cmd_calc(ctx2, slash_event("calc", options=[opt("expression", "sign(-8) * 10")]))
+    assert "= -10" in _embed(_first_response(ctx2))["description"]
+
+
 def test_calc_uses_per_server_angle_mode():
     ctx = FakeCtx()
     cfg.apply_updates(ctx, {"angle_mode": "deg"})

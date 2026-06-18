@@ -28,7 +28,7 @@ Built for the YourBot platform's sandboxed plugin runtime (`yourbot_sdk`; the pl
 
 | Category | Names |
 |---|---|
-| Basic | `abs(x)` `round(x[, n])` `floor(x)` `ceil(x)` `min(a, b, ...)` `max(a, b, ...)` `mod(a, b)` `pow(a, b)` `gcd(a, b)` `lcm(a, b)` `trunc(x)` |
+| Basic | `abs(x)` `round(x[, n])` `floor(x)` `ceil(x)` `min(a, b, ...)` `max(a, b, ...)` `mod(a, b)` `pow(a, b)` `gcd(a, b)` `lcm(a, b)` `trunc(x)` `hypot(x, y)` `sign(x)` |
 | Roots / exp / log | `sqrt(x)` `cbrt(x)` `exp(x)` `log(x[, base])` `log10(x)` `log2(x)` `ln(x)` |
 | Trig (honours `angle_mode`) | `sin` `cos` `tan` `asin` `acos` `atan` `atan2(y, x)` |
 | Hyperbolic | `sinh(x)` `cosh(x)` `tanh(x)` `asinh(x)` `acosh(x)` `atanh(x)` |

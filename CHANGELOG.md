@@ -4,6 +4,47 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.5.0] — 2026-06-17
+
+Expansion phase. Two more Basic functions, kept inside the plugin's
+founding constraints: zero outbound HTTP, Safe-tier, stdlib-only, no new
+capability. Minor bump per the semver policy ("minor = new function").
+
+### Added
+- **`hypot(x, y)`** — Euclidean distance / hypotenuse, `sqrt(x² + y²)`
+  via `math.hypot` (overflow-safe intermediate). Always defined, result
+  non-negative, ignores `angle_mode`.
+- **`sign(x)`** — sign function returning the int `-1`, `0`, or `+1`
+  (`-0.0` maps to `0`). Int in → int out, so it formats without a
+  spurious decimal.
+- 4 tests (happy paths, angle-mode independence, `-0.0` handling, int
+  result type) + 1 end-to-end handler test. `/calc-help` and the README
+  Basic table regenerate/update to 13 Basic functions.
+
+### Not done — and why (the expansion that was declined)
+The tune-up's expansion playbook is built around integrating an external
+data source. For Disculate that path was evaluated and **declined**, on
+the same grounds the playbook itself warns about:
+- **Live currency / unit-conversion rates** would require `proxy:http`
+  — a capability jump from the current Safe-tier `{interaction:respond,
+  storage:kv}` set that triggers human re-review (tier creep) — plus a
+  network round-trip and a new failure mode bolted onto a tool whose
+  entire value is being instant and sandboxed ("no leaving the
+  channel"). Not worth it for a calculator.
+- **Bundled snapshots** (physics constants, unit tables) add namespace
+  collisions (`c`, `g`, `h` vs. the existing `e`/`pi`/`tau`) for little
+  gain; unit conversions remain a user-confirmed deferral.
+- **`factorial` / `comb` / `perm`** stay deferred: beyond the documented
+  bignum-DoS surface, they produce results too large to display sanely
+  (`1000!` is a 2568-digit integer that just gets clipped). The bounded
+  `**` guard doesn't rescue the display problem.
+
+The deferred-items table in [CLAUDE.md](CLAUDE.md) is unchanged and still
+accurate.
+
+### Test count
+329 → 333.
+
 ## [0.4.0] — 2026-06-17
 
 UX pass (the tune-up's interaction phase). Minor bump: a new component

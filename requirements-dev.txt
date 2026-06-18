@@ -1,5 +1,11 @@
 # Dev/test environment. The bundled requirements.txt stays empty on
 # purpose — the plugin is stdlib-only and the platform runtime provides
 # the SDK. These are only what a contributor needs locally.
-yourbot-sdk>=0.6.1,<0.7
+#
+# Track the SDK line the platform actually deploys (0.7.x as of 2026-06)
+# so the vendored validator the audit runs matches what upload runs. The
+# plugin's runtime surface is unchanged across 0.6.x→0.7.x (the delta is
+# additive — see plugin.py / SDK-ASSUMPTIONS.md), but dev should validate
+# against the current line, not a pin capped below it.
+yourbot-sdk>=0.7.1,<0.8
 pytest>=8

@@ -143,3 +143,30 @@ New 0.6.x surface unused by Disculate (noted for future work):
 `ctx.kv.list_values` (prefix scan without N+1), `ctx.request_id`
 (SDK-provided correlation id — could eventually replace `lib/logctx`),
 `interaction.followup` returning `{message_id, channel_id}`.
+
+---
+
+## Source diff (2026-06-17, installed `yourbot_sdk` 0.7.1)
+
+`requirements-dev.txt` previously pinned `<0.7`; PyPI latest and the
+installed package are now **0.7.1** (the `mmo-maid-sdk` distribution
+mirrors the same versions). Diffed the 0.6.1 wheel against installed
+0.7.1, file by file. Five modules changed; the rest are byte-identical
+(`_components.py`, `_plugin.py`, `_validation.py`, `cli.py`,
+`dashboard.py`, `events.py`, `responses.py`). The CLI entry point is
+unchanged (`yourbot = yourbot_sdk.cli:main`). **The delta is additive and
+backward-compatible** — nothing Disculate calls changed shape:
+
+| Module | 0.6.1 → 0.7.1 change | Impact on Disculate |
+|---|---|---|
+| `__init__.py` | `__version__` 0.6.1 → 0.7.1 | none |
+| `_exceptions.py` | `RateLimitError.retry_after` int → **float**; every `SdkError` already carried a stable `.code` | none — the plugin catches, never constructs; the stub now mirrors this (`test_stub_contract`) |
+| `_transport.py` | Newer hosts ship structured `{code, retry_after}` alongside the error message; transport maps `code` → typed exception (`RATE_LIMITED`→`RateLimitError`, `CAPABILITY_DENIED`→`CapabilityError`, `KV_QUOTA_EXCEEDED`→`KvQuotaError`, …) before the legacy substring path; also parses `(retry in <N>s)` | none — every `ctx.*` call is wrapped to fail open on **any** exception type, typed or not |
+| `_context.py` | `respond(..., update_message: bool = False)` added (component in-place edit, Discord UPDATE_MESSAGE); `kv.increment(key, amount=1, *, path="")` made `amount` positional | additive — `respond` keyword call unaffected; `kv.increment` unused. `update_message` is the lever the v0.4.0 UX pass uses for the help button |
+| `testing.py` | `MockContext` mirrors the two `_context.py` changes | none — Disculate's handler tests use `tests/fakectx.py`, whose `respond(**kwargs)` already records any new kwarg |
+
+Conclusion: no production code change was required for 0.7.x; the only
+fixes were the dev pin (`<0.7`→`<0.8`) and refreshing the test stub +
+this inventory to model the 0.7.x exception surface. The v0.4.0 UX pass
+adopts `respond(update_message=True)` deliberately, gated on the same
+fail-open wrapper.

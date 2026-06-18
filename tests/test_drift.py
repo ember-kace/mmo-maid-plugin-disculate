@@ -77,3 +77,27 @@ def test_manifest_options_match_handler_reads():
     assert reads_by_func["cmd_calc_config"] == by_cmd["calc-config"], (
         "calc-config handler reads and manifest options diverged"
     )
+
+
+def test_requirements_dev_tracks_deployed_sdk_line():
+    """The dev/test pin must permit the SDK line the platform deploys
+    (0.7.x as of 2026-06). The audit runs the validator vendored INSIDE
+    the installed SDK; a pin capped below 0.7 would let a contributor
+    validate against a stale vendored validator that no longer matches
+    upload. This guards the v0.3.1 SDK-compat bump from regressing.
+    """
+    from packaging.requirements import Requirement
+
+    path = os.path.join(ROOT, "requirements-dev.txt")
+    with open(path, "r", encoding="utf-8") as f:
+        lines = [
+            ln.strip()
+            for ln in f
+            if ln.strip() and not ln.strip().startswith("#")
+        ]
+    sdk_lines = [ln for ln in lines if ln.lower().startswith("yourbot-sdk")]
+    assert sdk_lines, "yourbot-sdk not pinned in requirements-dev.txt"
+    spec = Requirement(sdk_lines[0]).specifier
+    assert spec.contains("0.7.1"), (
+        f"dev pin {sdk_lines[0]!r} excludes the deployed SDK line 0.7.x"
+    )

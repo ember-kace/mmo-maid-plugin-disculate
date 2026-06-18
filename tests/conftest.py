@@ -52,8 +52,9 @@ if not isinstance(sys.modules.get("yourbot_sdk"), types.ModuleType) or not hasat
             return deco
 
         def on_component(self, custom_id=None, *, prefix=None):
-            # Mirrors the real SDK signature (0.6.x): exactly one of
-            # custom_id= (exact match) or prefix= (startswith match).
+            # Mirrors the real SDK signature (0.6.x–0.7.x, unchanged):
+            # exactly one of custom_id= (exact match) or prefix=
+            # (startswith match).
             if (custom_id is None) == (prefix is None):
                 raise ValueError(
                     "on_component requires exactly one of custom_id= or prefix="
@@ -153,35 +154,52 @@ if not isinstance(sys.modules.get("yourbot_sdk"), types.ModuleType) or not hasat
     class Context:
         pass
 
+    # Mirrors the real yourbot_sdk._exceptions hierarchy as of 0.7.x:
+    # every SdkError carries a stable machine-readable ``code`` (class
+    # default, overridable via the ``code=`` kwarg the 0.7 transport
+    # passes when a newer host ships a structured error). The plugin
+    # never constructs these — it only catches them — but the stub stays
+    # faithful so test_stub_contract can lock the surface to the real SDK.
     class SdkError(Exception):
-        pass
+        code = "SDK_ERROR"
+
+        def __init__(self, message="", *, code=None):
+            if code is not None:
+                self.code = code
+            super().__init__(message)
 
     class CapabilityError(SdkError):
-        pass
+        code = "CAPABILITY_DENIED"
 
     class RateLimitError(SdkError):
-        def __init__(self, msg="", retry_after=60):
-            super().__init__(msg)
+        code = "RATE_LIMITED"
+
+        def __init__(self, message="", retry_after=0, *, code=None):
             self.retry_after = retry_after
+            super().__init__(message, code=code)
 
     class DiscordApiError(SdkError):
-        def __init__(self, msg="", status_code=0):
-            super().__init__(msg)
+        code = "DISCORD_API_ERROR"
+
+        def __init__(self, message="", status_code=0, *, code=None):
             self.status_code = status_code
+            super().__init__(message, code=code)
 
     class SdkPermissionError(SdkError):
-        def __init__(self, msg="", permission=""):
-            super().__init__(msg)
+        code = "BOT_MISSING_PERMISSION"
+
+        def __init__(self, message="", permission="", *, code=None):
             self.permission = permission
+            super().__init__(message, code=code)
 
     class ValidationError(SdkError):
-        pass
+        code = "VALIDATION_ERROR"
 
     class KvQuotaError(SdkError):
-        pass
+        code = "KV_QUOTA_EXCEEDED"
 
     class RpcTimeoutError(SdkError):
-        pass
+        code = "RPC_TIMEOUT"
 
     for name in (
         "Plugin", "Button", "ActionRow", "SelectMenu", "SelectOption", "TextInput",

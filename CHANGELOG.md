@@ -4,6 +4,53 @@ All notable changes to Disculate are documented here. Format adapted from [Keep 
 
 Per the GSD handoff's semver policy ("major for breaking changes"), the first public release ships as **0.1.0**. The version reaches 1.0.0 after the post-deploy SDK assumption probe (see [SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md)) confirms or supersedes every defensive try/except.
 
+## [0.3.1] — 2026-06-17
+
+SDK 0.6.x → 0.7.x compatibility + drift refresh. Patch bump (no behavior
+change for users, no new function/operator, no capability change). The
+tune-up's update phase: the platform now deploys `yourbot-sdk` 0.7.x, and
+the repo's dev pin still excluded it.
+
+**Why this matters:** the audit's `platform_validator` gate runs the
+upload validator *vendored inside the installed SDK*. A dev pin capped at
+`<0.7` meant a fresh `pip install -r requirements-dev.txt` pulled 0.6.1
+and validated the bundle against a stale vendored validator — green
+locally, but not the bytes the platform actually runs on upload.
+
+Diffed the 0.6.1 wheel against installed 0.7.1 file-by-file before
+touching anything: five SDK modules changed, all **additive and
+backward-compatible**. Full inventory in
+[SDK-ASSUMPTIONS.md](SDK-ASSUMPTIONS.md) "Source diff (2026-06-17)".
+Nothing Disculate calls changed shape, so no production code changed —
+every `ctx.*` call was already wrapped to fail open on any exception,
+including 0.7's new typed `code`-bearing errors.
+
+### Changed
+- **`requirements-dev.txt`**: `yourbot-sdk>=0.6.1,<0.7` → `>=0.7.1,<0.8`,
+  tracking the line the platform deploys so the vendored validator the
+  audit runs matches upload.
+- **Test SDK stub (`tests/conftest.py`)** now mirrors the real 0.7.x
+  exception hierarchy: every `SdkError` exposes a stable machine-readable
+  `.code` (overridable via the keyword-only `code=` the 0.7 transport
+  forwards for structured host errors); `RateLimitError.retry_after`
+  defaults to `0` (float) as in 0.7. The plugin only *catches* these, so
+  there's no runtime change — the stub stays faithful so the
+  stub-contract test keeps locking it to the real SDK.
+- Refreshed SDK-version references that said "0.6.1 / 0.6.x" (the
+  `plugin.py` module docstring, `CLAUDE.md` TL;DR) to "verified against
+  0.7.1; runs on 0.6.x too".
+
+### Added
+- `tests/test_drift.py:test_requirements_dev_tracks_deployed_sdk_line` —
+  asserts the dev pin permits 0.7.1 (guards the regression that motivated
+  this release).
+- `tests/test_stub_contract.py:test_sdk_errors_carry_stable_code` +
+  `test_sdk_error_code_overridable_via_kwarg` — pin the 0.7.x exception
+  `code` contract on the stub.
+
+### Test count
+314 → 317.
+
 ## [0.3.0] — 2026-06-10
 
 Seven new functions — the tune-up's expansion phase, scoped to internal

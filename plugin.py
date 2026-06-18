@@ -1,11 +1,16 @@
 """Disculate — in-Discord calculator.
 
-SDK: yourbot_sdk 0.6.1 (the package was renamed from mmo_maid_sdk in
-0.6.0; a deprecation shim keeps the old import working, but we import
-the canonical name). The 0.6.1 source confirms the surface this plugin
-relies on — interaction.respond(embeds=, allowed_mentions=), the
-ephemeral.cooldown_* shapes, kv.get None-on-miss — see
-SDK-ASSUMPTIONS.md for the inventory with source citations.
+SDK: yourbot_sdk (verified against 0.7.1; the package was renamed from
+mmo_maid_sdk in 0.6.0, and a deprecation shim keeps the old import
+working, but we import the canonical name). The 0.7.x source confirms
+the surface this plugin relies on — interaction.respond(embeds=,
+allowed_mentions=), the ephemeral.cooldown_* shapes, kv.get None-on-miss.
+The 0.6.x→0.7.x delta is additive and backward-compatible (structured
+transport error codes, float retry_after, respond(update_message=), a
+keyword-safe kv.increment reorder); none of it changes the surface this
+plugin uses, and every ctx.* call is already wrapped to fail open on the
+new typed exceptions. See SDK-ASSUMPTIONS.md for the inventory with
+source citations.
 """
 
 import math

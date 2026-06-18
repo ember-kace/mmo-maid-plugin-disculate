@@ -86,3 +86,33 @@ def test_discord_api_error_carries_status_code():
     from yourbot_sdk import DiscordApiError
     e = DiscordApiError("x", status_code=404)
     assert e.status_code == 404
+
+
+def test_sdk_errors_carry_stable_code():
+    """0.7.x contract: every SdkError exposes a stable machine-readable
+    ``code`` class attribute. The 0.7 transport branches on it before
+    falling back to substring matching, so the stub must model it."""
+    from yourbot_sdk import (
+        CapabilityError,
+        DiscordApiError,
+        KvQuotaError,
+        RateLimitError,
+        SdkError,
+        ValidationError,
+    )
+    assert SdkError().code == "SDK_ERROR"
+    assert CapabilityError().code == "CAPABILITY_DENIED"
+    assert RateLimitError().code == "RATE_LIMITED"
+    assert DiscordApiError().code == "DISCORD_API_ERROR"
+    assert ValidationError().code == "VALIDATION_ERROR"
+    assert KvQuotaError().code == "KV_QUOTA_EXCEEDED"
+
+
+def test_sdk_error_code_overridable_via_kwarg():
+    """A newer host can ship a structured ``code`` the transport forwards
+    via the keyword-only ``code=`` arg (e.g. QUOTA_EXCEEDED on a
+    RateLimitError, whose class default is RATE_LIMITED)."""
+    from yourbot_sdk import RateLimitError
+    e = RateLimitError("quota gone", retry_after=1.5, code="QUOTA_EXCEEDED")
+    assert e.code == "QUOTA_EXCEEDED"
+    assert e.retry_after == 1.5

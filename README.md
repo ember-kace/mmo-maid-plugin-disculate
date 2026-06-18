@@ -85,7 +85,7 @@ See [AUDIT-REPORT.md](AUDIT-REPORT.md) for the full audit trail.
 # Dev deps (test runner + the SDK whose vendored validator the audit uses):
 py -m pip install -r requirements-dev.txt
 
-# Run the test suite (314 tests, ~0.2s)
+# Run the test suite (333 tests, ~0.2s)
 py -m pytest tests/ -q
 
 # Build the deterministic production bundle (build/disculate.zip)
@@ -118,7 +118,7 @@ disculate/
 │   ├── diagnostics.py       ← per-reason error explainer + did-you-mean
 │   ├── reasons.py           ← reason codes + user-facing hints
 │   └── logctx.py            ← request_id ContextVar for log correlation
-├── tests/                   ← 314 tests: smoke, unit, handler, failure-injection, adversarial,
+├── tests/                   ← 333 tests: smoke, unit, handler, failure-injection, adversarial,
 │                              diagnostics, bundle/platform contract, drift guards, components
 ├── tools/
 │   ├── build_bundle.py      ← deterministic zip with allowlist guard
